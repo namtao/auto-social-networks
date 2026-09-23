@@ -1,0 +1,12 @@
+[Unit]
+Description=Run fb-digest three times a day
+
+[Timer]
+OnCalendar=*-*-* 08,13,20:00
+# Irregular start times look less like a bot.
+RandomizedDelaySec=30min
+# Run once at boot/login if a scheduled time was missed while the machine was off.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

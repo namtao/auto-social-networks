@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# fb-digest runtime data: browser profile (holds the Facebook session)
+data/
+interests.txt

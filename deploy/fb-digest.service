@@ -1,0 +1,13 @@
+[Unit]
+Description=Collect Facebook feed, score with Ollama, send Telegram digest
+
+[Service]
+Type=oneshot
+# Adjust to where the repo is cloned.
+WorkingDirectory=%h/Projects/auto-social-networks
+ExecStart=%h/.conda/envs/.env-auto-social-networks/bin/fb-digest run
+# The browser runs headful, so it needs the desktop session's DISPLAY/WAYLAND_DISPLAY,
+# which most desktops export to the systemd user manager. On a machine without a
+# desktop, install xorg-server-xvfb and use instead:
+# ExecStart=/usr/bin/xvfb-run -a %h/.conda/envs/.env-auto-social-networks/bin/fb-digest run
+TimeoutStartSec=30min
