@@ -1,4 +1,4 @@
-"""Collect the Facebook feed, score posts with Ollama and send a Telegram digest."""
+"""Collect the Facebook feed, score posts with an LLM and send a Telegram digest."""
 
 import argparse
 import asyncio

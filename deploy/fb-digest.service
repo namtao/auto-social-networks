@@ -1,5 +1,5 @@
 [Unit]
-Description=Collect Facebook feed, score with Ollama, send Telegram digest
+Description=Collect Facebook feed, score with an LLM, send Telegram digest
 
 [Service]
 Type=oneshot

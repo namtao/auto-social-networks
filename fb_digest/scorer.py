@@ -58,39 +58,48 @@ class ScoreBatch(BaseModel):
     items: list[PostScore]
 
 
+# The schema goes in the prompt instead of response_format: routers that turn response_format
+# into a Claude tool call get "items" back as a string with unescaped quotes inside.
+JSON_INSTRUCTION = (
+    "\n\nReply with only a JSON object matching this JSON schema, no prose or code fences:\n"
+    + json.dumps(ScoreBatch.model_json_schema(), ensure_ascii=False)
+)
+
+
 def _chat(s: Settings, system: str, user: str) -> str:
-    """Call Ollama /api/chat with the reply constrained to the ScoreBatch JSON schema."""
+    """Call an OpenAI-compatible /chat/completions and return the reply text."""
     body = json.dumps(
         {
-            "model": s.ollama_model,
+            "model": s.llm_model,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            "format": ScoreBatch.model_json_schema(),
+            # Some routers stream unless told otherwise.
             "stream": False,
-            "think": False,
-            "options": {"temperature": 0, "num_ctx": s.ollama_num_ctx},
+            "temperature": 0,
         }
     ).encode()
     request = urllib.request.Request(
-        f"{s.ollama_url}/api/chat",
+        f"{s.llm_url}/chat/completions",
         data=body,
-        # Cloudflare in front of the server rejects the default "Python-urllib" agent with 403.
+        # Cloudflare in front of a server rejects the default "Python-urllib" agent with 403.
         headers={"Content-Type": "application/json", "User-Agent": "fb-digest/0.1"},
     )
-    with urllib.request.urlopen(request, timeout=s.ollama_timeout) as response:
-        reply = json.load(response)
-    if reply.get("done_reason") == "length":
+    with urllib.request.urlopen(request, timeout=s.llm_timeout) as response:
+        choice = json.load(response)["choices"][0]
+    if choice.get("finish_reason") == "length":
         raise RuntimeError("Model output hit the context/length limit; lower SCORE_BATCH_SIZE")
-    return reply["message"]["content"]
+    return choice["message"]["content"]
 
 
 def _score_batch(s: Settings, rows: list[dict]) -> ScoreBatch:
     posts = "\n\n".join(
         f'<post id="{r["id"]}">\n{r["text"][:MAX_POST_CHARS]}\n</post>' for r in rows
     )
-    content = _chat(s, SYSTEM_PROMPT.format(interests=s.interests), posts)
+    content = _chat(s, SYSTEM_PROMPT.format(interests=s.interests) + JSON_INSTRUCTION, posts)
+    # Tolerate code fences or a sentence around the object.
+    content = content[content.find("{") : content.rfind("}") + 1]
     try:
         return ScoreBatch.model_validate_json(content)
     except ValidationError as exc:

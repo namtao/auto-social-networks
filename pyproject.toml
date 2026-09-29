@@ -1,7 +1,7 @@
 [project]
 name = "fb-digest"
 version = "0.1.0"
-description = "Collect the Facebook news feed with a real browser, score posts with a local LLM (Ollama), send a Telegram digest"
+description = "Collect the Facebook news feed with a real browser, score posts with an LLM (OpenAI-compatible API), send a Telegram digest"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

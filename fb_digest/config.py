@@ -21,10 +21,9 @@ class Settings:
     scroll_delay: tuple[float, float]
     max_posts: int
     min_posts: int
-    ollama_url: str
-    ollama_model: str
-    ollama_num_ctx: int
-    ollama_timeout: int
+    llm_url: str
+    llm_model: str
+    llm_timeout: int
     batch_size: int
     score_threshold: int
     interests: str
@@ -54,10 +53,9 @@ def load_settings() -> Settings:
         scroll_delay=(float(_env("SCROLL_DELAY_MIN", "1")), float(_env("SCROLL_DELAY_MAX", "2.5"))),
         max_posts=int(_env("MAX_POSTS", "60")),
         min_posts=int(_env("MIN_POSTS", "5")),
-        ollama_url=_env("OLLAMA_URL", "https://ollama.namtao.dpdns.org").rstrip("/"),
-        ollama_model=_env("OLLAMA_MODEL", "qwen3:14b"),
-        ollama_num_ctx=int(_env("OLLAMA_NUM_CTX", "32768")),
-        ollama_timeout=int(_env("OLLAMA_TIMEOUT", "600")),
+        llm_url=_env("LLM_URL", "http://localhost:20128/v1").rstrip("/"),
+        llm_model=_env("LLM_MODEL", "antigravity/claude-sonnet-5"),
+        llm_timeout=int(_env("LLM_TIMEOUT", "600")),
         batch_size=int(_env("SCORE_BATCH_SIZE", "8")),
         score_threshold=int(_env("SCORE_THRESHOLD", "7")),
         interests=interests_file.read_text(encoding="utf-8"),
