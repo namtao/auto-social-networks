@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
+# Pages/groups picked in the web UI; when non-empty, collection scans them instead of the feed.
+SOURCES_FILE = DATA_DIR / "manage" / "sources.json"
 
 
 @dataclass(frozen=True)
@@ -20,11 +22,13 @@ class Settings:
     scroll_rounds: int
     scroll_delay: tuple[float, float]
     max_posts: int
+    source_days: int
     min_posts: int
     llm_url: str
     llm_model: str
     llm_timeout: int
     batch_size: int
+    llm_concurrency: int
     score_threshold: int
     interests: str
     telegram_token: str | None
@@ -52,11 +56,13 @@ def load_settings() -> Settings:
         scroll_rounds=int(_env("SCROLL_ROUNDS", "60")),
         scroll_delay=(float(_env("SCROLL_DELAY_MIN", "1")), float(_env("SCROLL_DELAY_MAX", "2.5"))),
         max_posts=int(_env("MAX_POSTS", "60")),
+        source_days=int(_env("SOURCE_DAYS", "2")),
         min_posts=int(_env("MIN_POSTS", "5")),
         llm_url=_env("LLM_URL", "http://localhost:20128/v1").rstrip("/"),
         llm_model=_env("LLM_MODEL", "antigravity/claude-sonnet-5"),
         llm_timeout=int(_env("LLM_TIMEOUT", "600")),
         batch_size=int(_env("SCORE_BATCH_SIZE", "8")),
+        llm_concurrency=int(_env("LLM_CONCURRENCY", "4")),
         score_threshold=int(_env("SCORE_THRESHOLD", "7")),
         interests=interests_file.read_text(encoding="utf-8"),
         telegram_token=_env("TELEGRAM_BOT_TOKEN") or None,

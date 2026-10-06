@@ -1,8 +1,13 @@
 // Evaluated in the Facebook tab; resolves to [{text, link}] for the posts currently in the DOM.
-// Deliberately "dumb": no author/ad/content parsing, the LLM does that from the raw text.
+// Deliberately "dumb": no author/content parsing, the LLM does that from the raw text. The one
+// exception is paid ads, which carry a cheap and reliable marker (see SPONSORED).
 (async () => {
   const MIN_LEN = 40;
   const MAX_LEN = 6000;
+  // FB scrambles the "Sponsored" label; in innerText it collapses to a line holding only a
+  // WORD JOINER where an organic post shows its timestamp. Dropped here so ads neither use
+  // up MAX_POSTS nor cost an LLM call.
+  const SPONSORED = /^[ \t]*⁠[ \t]*$/m;
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // Several independent markers for a feed post; keep only the outermost match so
@@ -56,5 +61,5 @@
         link: a ? cleanLink(a.href) : null,
       };
     })
-    .filter((p) => p.text.length >= MIN_LEN);
+    .filter((p) => p.text.length >= MIN_LEN && !SPONSORED.test(p.text));
 })()

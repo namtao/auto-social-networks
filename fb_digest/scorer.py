@@ -1,6 +1,7 @@
 import json
 import logging
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 from pydantic import BaseModel, ValidationError
 
@@ -107,16 +108,21 @@ def _score_batch(s: Settings, rows: list[dict]) -> ScoreBatch:
 
 
 def score_pending(s: Settings, store: Store) -> int:
-    """Score every unscored post in batches; return how many got a score."""
+    """Score every unscored post in batches, several batches at once; return how many got a score."""
     rows = store.unscored()
-    scored = 0
-    for start in range(0, len(rows), s.batch_size):
-        batch = rows[start : start + s.batch_size]
+    batches = [rows[i : i + s.batch_size] for i in range(0, len(rows), s.batch_size)]
+
+    def score(batch: list[dict]) -> int:
         result = _score_batch(s, batch)
         ids = {r["id"] for r in batch}
+        saved = 0
         for item in result.items:
             if item.id in ids:
                 store.save_score(item.id, item.model_dump())
-                scored += 1
+                saved += 1
         # Posts the model skipped stay unscored and are retried on the next run.
-    return scored
+        return saved
+
+    # A failing batch re-raises here once the others finish; their scores are already saved.
+    with ThreadPoolExecutor(max_workers=s.llm_concurrency) as pool:
+        return sum(pool.map(score, batches))

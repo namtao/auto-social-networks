@@ -1,6 +1,6 @@
 # auto-social-networks
 
-`fb-digest` lướt trang chủ Facebook thay bạn, rồi gửi lên Telegram những bài đáng đọc.
+`fb-digest` lướt trang chủ Facebook, hoặc các trang và nhóm bạn chọn, thay bạn, rồi gửi lên Telegram những bài đáng đọc.
 
 Bot mở Chrome thật với một profile riêng đã đăng nhập, cuộn feed như người thật và lấy nguyên văn bản của từng bài. Việc nhận ra tác giả, quảng cáo hay chủ đề được giao hết cho một LLM qua API tương thích OpenAI (mặc định là router cục bộ tại `localhost:20128`). Nhờ vậy, khi Facebook đổi giao diện, code gần như không phải sửa.
 
@@ -15,7 +15,7 @@ LLM /v1/chat/completions + schema is_ad, author, summary, score 0-10   fb_digest
 Telegram                          digest bài score ≥ ngưỡng, cảnh báo   fb_digest/telegram.py
 ```
 
-Bài quảng cáo bị loại khỏi digest. Bài gợi ý từ các trang bạn chưa theo dõi vẫn được giữ và chấm điểm theo nội dung.
+Quảng cáo trả tiền bị bỏ ngay lúc thu bài; bài bán hàng còn lại được LLM gắn cờ `is_ad` và loại khỏi digest. Bài gợi ý từ các trang bạn chưa theo dõi vẫn được giữ và chấm điểm theo nội dung.
 
 ## Yêu cầu
 
@@ -56,11 +56,45 @@ fb-digest collect    # chỉ thu bài
 fb-digest score      # chấm các bài chưa có điểm
 fb-digest digest     # gửi các bài đủ điểm mà chưa gửi
 fb-digest login      # đăng nhập lại khi nhận cảnh báo hết session/checkpoint
+fb-digest manage     # mở trang quản lý: quét bài theo trang/nhóm, dọn bạn bè/trang/nhóm
 ```
 
 Nếu không activate conda env, gọi thẳng `~/.conda/envs/.env-auto-social-networks/bin/fb-digest`.
 
 Mỗi bài chỉ được gửi một lần. Một lượt với 30 bài mất khoảng 6 phút: khoảng 3,5 phút thu bài và khoảng 2,5 phút chấm điểm (khoảng 5 giây mỗi bài với `antigravity/claude-sonnet-5`).
+
+## Trang quản lý
+
+`fb-digest manage` mở trang web tại `http://127.0.0.1:8765/`, chỉ truy cập được từ máy này. Trang có 4 tab:
+
+| Tab | Nội dung | Lọc | Thao tác |
+|---|---|---|---|
+| Bài viết | Bài từ các nguồn đã chọn, mới nhất trước: thời gian, nguồn, điểm, tóm tắt, link | Chỉ bài từ nguồn, điểm ≥ N, nguồn, ẩn quảng cáo | Quét ngay, có thể kèm gửi digest Telegram |
+| Bạn bè | Ảnh, tên, trạng thái, bạn chung, giới tính | Chỉ tài khoản đã khóa, bạn chung ≤ N, giới tính | Hủy kết bạn |
+| Trang | Ảnh, tên, loại trang, đã thích, xác minh | Chỉ nguồn quét, loại trang | Bỏ theo dõi, chọn làm nguồn quét |
+| Nhóm | Ảnh, tên, lần bạn vào cuối, bài mới nhất, quản trị | Chỉ nguồn quét, không vào ≥ N ngày, không có bài mới ≥ N ngày | Rời nhóm, chọn làm nguồn quét |
+
+Bấm "Làm mới" để tải danh sách từ Facebook (vài giây với trang, khoảng 30 giây với bạn bè hoặc nhóm). Kết quả được lưu ở `data/manage/`. Nút gạt "Thao tác" ở góc phải chọn giữa nút ngay trên từng dòng và chế độ chọn nhiều dòng rồi làm một lần. "Xuất CSV" xuất các dòng đang chọn, hoặc toàn bộ dòng đang hiển thị nếu chưa chọn dòng nào.
+
+### Quét bài theo trang, nhóm
+
+1. Ở tab Trang hoặc Nhóm, bấm ☆ để chọn nguồn. Danh sách nguồn được lưu ở `data/manage/sources.json`.
+2. Ở tab Bài viết (trang mở ra mặc định), bấm "Quét ngay". Bot lấy các bài đăng trong 2 ngày gần nhất của từng nguồn (đổi bằng `SOURCE_DAYS`), lưu vào bảng `fb_posts` trong Postgres, chấm điểm bằng LLM, và gửi digest Telegram nếu bạn tick "Gửi digest Telegram".
+
+Tab Bài viết hiển thị toàn bộ bài đã lưu, mới nhất trước. Bộ lọc bạn điền (ví dụ "Điểm ≥") được nhớ cho lần mở sau. Nút "Bỏ qua" trên mỗi dòng ẩn bài đó (lưu ở cột `skipped_at`) và loại nó khỏi digest Telegram; bỏ tick "Ẩn bài đã bỏ qua" để xem lại và bấm "Hiện lại". Bài trùng không được lưu lại: trùng nội dung, hoặc trùng link khi tác giả sửa bài.
+
+Khi đã có nguồn, `fb-digest run` (kể cả khi timer chạy) cũng quét các nguồn này thay cho feed. Bỏ hết ☆ thì bot quay lại lướt feed như trước.
+
+Bot quét 4 nguồn cùng lúc bằng cách gọi thẳng API lấy bài của nhóm/trang, không mở từng trang, nên mỗi nguồn chỉ mất vài giây. Lần đầu, một nguồn của mỗi loại (nhóm, trang) được mở và cuộn như người thật để học mẫu request, lưu ở `data/manage/feed_queries.json`. Nếu Facebook đổi API, nguồn đó tự quay về cách mở trang và bot học lại mẫu mới.
+
+Thời gian đăng lấy từ dữ liệu JSON mà Facebook gửi về trang (`creation_time`), nên bài được sắp xếp đúng theo giờ đăng. Bài lấy từ feed không có giờ đăng chính xác; bỏ tick "Chỉ bài từ nguồn đã chọn" để xem cả những bài đó, xếp theo giờ thu bài.
+
+### Lưu ý
+
+- **Tài khoản đã khóa:** là bạn bè vẫn có trong danh sách trên trang cá nhân nhưng Facebook không trả về trong danh sách bạn bè đang hoạt động.
+- **Thao tác:** chạy lần lượt, mỗi thao tác cách nhau 3–7 giây, và tự dừng ở lỗi đầu tiên vì lỗi thường là do Facebook đang hạn chế tài khoản. Các thao tác này không hoàn tác được. Nên xử lý vài chục mục mỗi lần, đừng xử lý cả trăm mục liền. Rời nhóm hoặc bỏ theo dõi một nguồn quét cũng bỏ nó khỏi danh sách nguồn.
+- **Bỏ theo dõi trang:** trang không còn hiện trên feed, nhưng lượt thích trang (nếu có) vẫn giữ nguyên.
+- **Chạy cùng lệnh khác:** trang quản lý dùng chung profile Chrome với bot. Khi đang mở trang quản lý, hãy quét bằng nút "Quét ngay" thay vì `fb-digest run`, và tắt trang quản lý (Ctrl+C) trước giờ timer chạy.
 
 ## Chạy tự động
 
@@ -88,14 +122,16 @@ Chế độ có giao diện, kể cả khi thu nhỏ, cần `DISPLAY`/`WAYLAND_D
 | `BROWSER` / `BROWSER_PATH` | `auto` / trống | `chrome`, `brave`, `msedge`; có thể trỏ thẳng tới file chạy |
 | `HEADLESS` | `false` | `true` để chạy không giao diện (đã chạy được với Facebook) |
 | `MINIMIZED` | `false` | `true` để thu nhỏ cửa sổ ngay khi mở (khi `HEADLESS=false`) |
-| `FEED_URL` | `https://www.facebook.com/` | Trang chủ; `/?filter=all&sk=h_chr` là feed "Mới nhất" |
+| `FEED_URL` | `https://www.facebook.com/` | Trang chủ; `/?filter=all&sk=h_chr` là tab Bảng feed: chỉ bạn bè, nhóm và trang bạn theo dõi, xếp theo thời gian, không có bài gợi ý |
 | `MAX_POSTS` | `60` | Dừng khi thu đủ số bài này |
 | `SCROLL_ROUNDS` | `60` | Số vòng cuộn tối đa; bot cũng dừng sau 8 vòng liền không có bài mới |
 | `SCROLL_DELAY_MIN` / `SCROLL_DELAY_MAX` | `1` / `2.5` | Thời gian chờ ngẫu nhiên giữa các lần cuộn (giây) |
-| `MIN_POSTS` | `5` | Thu ít hơn số này thì gửi cảnh báo |
+| `MIN_POSTS` | `5` | Lướt feed mà thu ít hơn số này thì gửi cảnh báo (quét nguồn chỉ cảnh báo khi không có bài nào) |
 | `SCORE_BATCH_SIZE` | `8` | Số bài gửi cho LLM mỗi lần |
+| `LLM_CONCURRENCY` | `4` | Số lô bài gửi cho LLM cùng lúc khi chấm điểm |
 | `SCORE_THRESHOLD` | `7` | Điểm tối thiểu để bài vào digest |
 | `INTERESTS_FILE` | `interests.txt` | Mô tả sở thích mà LLM dùng để chấm điểm |
+| `SOURCE_DAYS` | `2` | Khi quét trang/nhóm đã chọn, chỉ lấy bài đăng trong số ngày gần nhất này (tính lùi từ lúc quét) |
 
 ## Chỉnh chất lượng digest
 
@@ -117,6 +153,8 @@ Nếu digest vẫn còn nhiều bài thừa, thử lần lượt các cách sau:
 
 ## Ghi chú kỹ thuật
 
+- **Nhận diện quảng cáo:** Facebook làm rối nhãn "Được tài trợ" nên chữ này gần như không có trong innerText. Thay vào đó, ở chỗ thời gian đăng bài, quảng cáo chỉ có một dòng chứa ký tự WORD JOINER (U+2060). `collector.js` bỏ các bài này trước khi lưu. Nếu Facebook đổi cách hiển thị, quảng cáo vẫn bị LLM bắt qua `is_ad`.
+- **API của trang quản lý:** [fb_digest/account.py](fb_digest/account.py) gọi API GraphQL nội bộ của Facebook bằng `fetch()` từ bên trong tab facebook.com đã đăng nhập, giống cách web Facebook gọi, nên dùng đúng phiên và token thật. Các `doc_id` được ghi lại từ web Facebook. Khi Facebook đổi `doc_id`, thao tác sẽ báo lỗi kèm tên API; lấy `doc_id` mới trong tab Network của DevTools rồi sửa hằng số tương ứng ở đầu file.
 - **Lọc trùng:** mỗi lượt, văn bản của bài có thể khác đi (thời gian tương đối, số like). Vì vậy khóa của bài là hash của các dòng dài nhất sau khi bỏ chữ số, tức phần thân bài.
 - **Đóng Chrome:** `stop()` của zendriver luôn SIGKILL Chrome sau 3 giây, làm mất cookie chưa kịp ghi. Bot tự đóng Chrome một cách từ tốn trước khi gọi `stop()`; xem `_close()` trong `collector.py`.
 - **Cửa sổ 1280×1400:** cửa sổ mặc định chỉ khoảng 800×600, khiến mỗi lần cuộn chưa qua hết một bài.
