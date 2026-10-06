@@ -22,7 +22,8 @@ PAGES_QUERY =("PagesCometAllLikedPagesSectionPaginationQuery", "2812910100674072
 GROUPS_QUERY = ("GroupsLeftRailYourGroupsPaginatedQuery", "9658982227546884")
 UNFRIEND = ("FriendingCometUnfriendMutation", "24028849793460009")
 UNFOLLOW_PAGE = ("usePageCometUnfollowMutation", "23977842521823837")
-LEAVE_GROUP = ("GroupCometLeaveForumMutation", "28493416426984190")
+LEAVE_FORUM = ("GroupCometLeaveForumMutation", "28493416426984190")
+LEAVE_GROUP = ("useGroupLeaveMutation", "38666184769662540")
 
 GROUPS_PAGE = "https://www.facebook.com/groups/joins/?nav_source=tab"
 FRIENDS_PAGE = "https://www.facebook.com/me/friends_all"
@@ -162,8 +163,9 @@ class Account:
             "avatar": (n.get("profile_picture") or {}).get("uri", ""),
         } for n in nodes]
 
-    async def groups(self) -> list[dict]:
-        groups: dict[str, dict] = {}
+    async def _joined_groups(self) -> list[tuple[dict, bool]]:
+        """Every joined group node, paired with whether the viewer administers it."""
+        joined = []
         for list_type, admin in (("NON_ADMIN_MODERATOR_GROUPS", False), ("ADMIN_MODERATOR_GROUPS", True)):
             variables = {"count": 30, "listType": list_type, "scale": 1}
             try:
@@ -174,18 +176,23 @@ class Account:
                 if admin:
                     continue  # the admin list type is optional
                 raise
-            for n in nodes:
-                groups[_group_url(n.get("url") or n["id"])] = {
-                    "id": n["id"],
-                    "name": n.get("name") or "",
-                    "url": n.get("url") or f"https://www.facebook.com/groups/{n['id']}/",
-                    "admin": admin,
-                    "avatar": (n.get("profile_picture_48") or {}).get("uri", ""),
-                    "last_post_days": round((time.time() - n["last_post_time"]) / 86400, 1)
-                    if n.get("last_post_time") else None,
-                    "visited": "",
-                    "visited_days": None,
-                }
+            joined += [(n, admin) for n in nodes]
+        return joined
+
+    async def groups(self) -> list[dict]:
+        groups: dict[str, dict] = {}
+        for n, admin in await self._joined_groups():
+            groups[_group_url(n.get("url") or n["id"])] = {
+                "id": n["id"],
+                "name": n.get("name") or "",
+                "url": n.get("url") or f"https://www.facebook.com/groups/{n['id']}/",
+                "admin": admin,
+                "avatar": (n.get("profile_picture_48") or {}).get("uri", ""),
+                "last_post_days": round((time.time() - n["last_post_time"]) / 86400, 1)
+                if n.get("last_post_time") else None,
+                "visited": "",
+                "visited_days": None,
+            }
         # "Last visited" only exists on the joined-groups page, so read it from there.
         await self.tab.get(GROUPS_PAGE)
         await self.tab.sleep(5)
@@ -219,13 +226,31 @@ class Account:
             raise FacebookError(f"Bỏ theo dõi trang {page_id} không thành công: {json.dumps(data)[:200]}")
 
     async def leave_group(self, group_id: str) -> None:
-        data = await self._mutate(
-            LEAVE_GROUP,
-            {"attribution_id_v2": "GroupsCometJoinsRoot.react,comet.groups.joins,via_cold_start,,,,,", "group_id": group_id},
-            {"inviteShortLinkKey": None, "isChainingRecommendationUnit": False, "ordering": ["viewer_added"],
-             "scale": 1, "groupID": group_id,
-             "__relay_internal__pv__GroupsCometGYSJUnifiedUnitCardImageHeightrelayprovider": 150,
-             "__relay_internal__pv__GroupsCometGroupChatLazyLoadLastMessageSnippetrelayprovider": False},
+        # Facebook has two kinds of group, each with its own leave mutation; the wrong one answers
+        # null with a generic "field_exception" error, so try both.
+        attempts = (
+            (LEAVE_FORUM,
+             {"attribution_id_v2": "GroupsCometJoinsRoot.react,comet.groups.joins,via_cold_start,,,,,", "group_id": group_id},
+             {"inviteShortLinkKey": None, "isChainingRecommendationUnit": False, "ordering": ["viewer_added"],
+              "scale": 1, "groupID": group_id,
+              "__relay_internal__pv__GroupsCometGYSJUnifiedUnitCardImageHeightrelayprovider": 150,
+              "__relay_internal__pv__GroupsCometGroupChatLazyLoadLastMessageSnippetrelayprovider": False}),
+            (LEAVE_GROUP,
+             {"action_source": "COMET_GROUP_PAGE", "attribution_id_v2": "CometGroupDiscussionRoot.react,comet.group,via_cold_start,,,,,",
+              "group_id": group_id, "readd_policy": "ALLOW_READD"},
+             {"groupID": group_id, "ordering": ["viewer_added"], "scale": 1}),
         )
-        if not data.get("leave_forum_group"):
-            raise FacebookError(f"Rời nhóm {group_id} không thành công: {json.dumps(data)[:200]}")
+        replies = []
+        for op, input_, extra in attempts:
+            try:
+                data = await self._mutate(op, input_, extra)
+            except FacebookError as exc:
+                replies.append(str(exc))
+                continue
+            if any(data.values()):
+                return
+            replies.append(json.dumps(data))
+        # Both also answer null when the viewer is no longer a member (left elsewhere, or removed
+        # by an admin since the list was cached); that group is already gone.
+        if any(n["id"] == group_id for n, _ in await self._joined_groups()):
+            raise FacebookError(f"Rời nhóm {group_id} không thành công: {' | '.join(replies)[:300]}")
