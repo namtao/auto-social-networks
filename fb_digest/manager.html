@@ -141,6 +141,7 @@ const KINDS = {
       { key: 'skipped', label: '', nosort: true, render: (r) => `<button class="btn small" data-skip>${r.skipped ? 'Hiện lại' : 'Bỏ qua'}</button>` },
     ],
     filters: [
+      { type: 'check', key: 'latest', label: 'Chỉ bài mới quét', default: true },
       { type: 'check', key: 'exact_time', label: 'Chỉ bài từ nguồn đã chọn', default: true },
       { type: 'min', key: 'score', label: 'Điểm ≥' },
       { type: 'select', key: 'source', label: 'Nguồn' },
@@ -203,7 +204,7 @@ const store = {
 };
 // Always land on the posts list; the filters typed in earlier are remembered per tab.
 const state = { kind: 'posts', mode: store.get('mode', 'row'), data: {}, selected: {}, sort: {}, filters: {},
-                search: '', sources: [], threshold: 7, days: 3 };
+                search: '', sources: [], threshold: 7, days: 3, lastRun: null };
 for (const [k, v] of Object.entries(KINDS)) {
   state.selected[k] = new Set();
   state.sort[k] = v.sort || { key: 'name', dir: 1 };
@@ -280,7 +281,8 @@ function render() {
   $('bulk-box').hidden = !bulk;
   $('src-on').hidden = $('src-off').hidden = !kind.source;
   $('updated').textContent = kind.readonly
-    ? `Nguồn quét: ${state.sources.length} · lấy bài trong ${state.days} ngày gần nhất`
+    ? `Nguồn quét: ${state.sources.length} · lấy bài trong ${state.days} ngày gần nhất` +
+      (state.lastRun ? ` · quét lần cuối ${new Date(state.lastRun).toLocaleString('vi-VN')}` : '')
     : data?.updated ? 'Cập nhật: ' + new Date(data.updated).toLocaleString('vi-VN') : '';
 
   const { key, dir } = state.sort[state.kind];
@@ -298,7 +300,9 @@ function render() {
       ? 'Chưa có bài. Chọn nguồn bằng ☆ ở tab Trang hoặc Nhóm, rồi bấm “Quét ngay”.'
       : data ? 'Không có mục nào.' : 'Chưa có dữ liệu. Bấm “Làm mới” để tải từ Facebook.'}</td></tr>`;
   } else if (!list.length) {
-    $('tbody').innerHTML = `<tr><td colspan="${span}" class="empty">Không có mục nào khớp bộ lọc.</td></tr>`;
+    const none = kind.readonly && state.filters.posts.latest && !data.items.some((r) => r.latest)
+      ? 'Lần quét gần nhất không có bài mới. Bỏ tick “Chỉ bài mới quét” để xem bài cũ.' : 'Không có mục nào khớp bộ lọc.';
+    $('tbody').innerHTML = `<tr><td colspan="${span}" class="empty">${none}</td></tr>`;
   } else {
     $('tbody').innerHTML = list.map((r) => {
       const cells = [];
@@ -329,7 +333,11 @@ async function pollJob() {
     $('job-bar').style.width = (job.total ? (100 * job.done) / job.total : 0) + '%';
     $('job-cancel').hidden = !job.running;
   }
-  if (job.kind && !job.running && pollJob.wasRunning) { await load(job.kind); await loadSources(); renderFilters(); }
+  if (job.kind && !job.running && pollJob.wasRunning) {
+    // A finished scan shows only what it found, even if the filter was turned off before.
+    if (job.kind === 'posts') { state.filters.posts.latest = true; store.set('filters', JSON.stringify(state.filters)); }
+    await load(job.kind); await loadSources(); renderFilters();
+  }
   pollJob.wasRunning = job.running;
   render();
   if (job.running) setTimeout(pollJob, 1500);
@@ -338,7 +346,7 @@ async function pollJob() {
 async function load(kind) {
   const data = await api(kind);
   if (kind === 'posts') {
-    state.threshold = data.threshold; state.days = data.days;
+    state.threshold = data.threshold; state.days = data.days; state.lastRun = data.last_run;
     for (const r of data.items) { r.source = r.source || 'Feed trang chủ'; }
   }
   state.data[kind] = data;

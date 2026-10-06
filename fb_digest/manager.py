@@ -150,17 +150,24 @@ class Manager:
 
         async def on_done(src, posts):
             counts["collected"] += len(posts)
-            counts["new"] += await asyncio.to_thread(store.add_posts, posts)
+            # Await before adding: sources finish concurrently, and `+= await` would add to a stale value.
+            new = await asyncio.to_thread(store.add_posts, posts)
+            counts["new"] += new
             job["done"] += 1
             job["current"] = src["name"]
 
         job["current"] = "Mở Facebook"
-        async with self.lock:
-            await self._ready()
-            await collector.scan_sources(self.account.tab, sources, s.source_days, on_done, lambda: job["cancel"])
+        # Log the run even when stopped or failed: the posts tab marks what the latest run found.
+        status = "error"
+        try:
+            async with self.lock:
+                await self._ready()
+                await collector.scan_sources(self.account.tab, sources, s.source_days, on_done, lambda: job["cancel"])
+            status = "cancelled" if job["cancel"] else "ok"
+        finally:
+            await asyncio.to_thread(store.log_run, started, counts["collected"], counts["new"], status)
         if job["cancel"]:
             return
-        await asyncio.to_thread(store.log_run, started, counts["collected"], counts["new"], "ok")
         job["done"] = len(sources)
         job["current"] = "Chấm điểm bằng LLM"
         scored = await asyncio.to_thread(scorer.score_pending, s, store)
@@ -209,7 +216,8 @@ def _handler(mgr: Manager):
                     return self._json(200, collector.load_sources())
                 if parts == ["api", "posts"]:
                     return self._json(200, {"items": mgr.store.recent_posts(), "days": mgr.s.source_days,
-                                            "threshold": mgr.s.score_threshold})
+                                            "threshold": mgr.s.score_threshold,
+                                            "last_run": mgr.store.last_run_at()})
                 if len(parts) == 2 and parts[0] == "api" and parts[1] in ACTIONS:
                     return self._json(200, load(parts[1]))
                 self._json(404, {"error": "not found"})

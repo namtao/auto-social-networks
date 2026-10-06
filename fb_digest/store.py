@@ -130,13 +130,19 @@ class Store:
         ).fetchall()
 
     def recent_posts(self, limit: int = 5000) -> list[dict]:
+        # A post is stored only the first time it is seen, so collected_at at or after the latest
+        # run's start marks the posts that run found for the first time.
         return self.db.execute(
             """SELECT id, link, author, summary, score, tags, is_ad, source, sent_at, left(text, 600) AS text,
                       skipped_at IS NOT NULL AS skipped,
-                      coalesce(posted_at, collected_at) AS posted_at, posted_at IS NOT NULL AS exact_time
+                      coalesce(posted_at, collected_at) AS posted_at, posted_at IS NOT NULL AS exact_time,
+                      collected_at >= (SELECT max(started_at) FROM fb_runs) AS latest
                FROM fb_posts ORDER BY coalesce(posted_at, collected_at) DESC LIMIT %s""",
             (limit,),
         ).fetchall()
+
+    def last_run_at(self) -> datetime | None:
+        return self.db.execute("SELECT max(started_at) AS at FROM fb_runs").fetchone()["at"]
 
     def set_skipped(self, post_ids: list[int], skipped: bool) -> None:
         self.db.execute(

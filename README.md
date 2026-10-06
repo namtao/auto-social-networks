@@ -69,7 +69,7 @@ Mỗi bài chỉ được gửi một lần. Một lượt với 30 bài mất k
 
 | Tab | Nội dung | Lọc | Thao tác |
 |---|---|---|---|
-| Bài viết | Bài từ các nguồn đã chọn, mới nhất trước: thời gian, nguồn, điểm, tóm tắt, link | Chỉ bài từ nguồn, điểm ≥ N, nguồn, ẩn quảng cáo | Quét ngay, có thể kèm gửi digest Telegram |
+| Bài viết | Bài từ các nguồn đã chọn, mới nhất trước: thời gian, nguồn, điểm, tóm tắt, link | Chỉ bài mới quét, chỉ bài từ nguồn, điểm ≥ N, nguồn, ẩn quảng cáo | Quét ngay, có thể kèm gửi digest Telegram |
 | Bạn bè | Ảnh, tên, trạng thái, bạn chung, giới tính | Chỉ tài khoản đã khóa, bạn chung ≤ N, giới tính | Hủy kết bạn |
 | Trang | Ảnh, tên, loại trang, đã thích, xác minh | Chỉ nguồn quét, loại trang | Bỏ theo dõi, chọn làm nguồn quét |
 | Nhóm | Ảnh, tên, lần bạn vào cuối, bài mới nhất, quản trị | Chỉ nguồn quét, không vào ≥ N ngày, không có bài mới ≥ N ngày | Rời nhóm, chọn làm nguồn quét |
@@ -81,7 +81,7 @@ Bấm "Làm mới" để tải danh sách từ Facebook (vài giây với trang,
 1. Ở tab Trang hoặc Nhóm, bấm ☆ để chọn nguồn. Danh sách nguồn được lưu ở `data/manage/sources.json`.
 2. Ở tab Bài viết (trang mở ra mặc định), bấm "Quét ngay". Bot lấy các bài đăng trong 2 ngày gần nhất của từng nguồn (đổi bằng `SOURCE_DAYS`), lưu vào bảng `fb_posts` trong Postgres, chấm điểm bằng LLM, và gửi digest Telegram nếu bạn tick "Gửi digest Telegram".
 
-Tab Bài viết hiển thị toàn bộ bài đã lưu, mới nhất trước. Bộ lọc bạn điền (ví dụ "Điểm ≥") được nhớ cho lần mở sau. Nút "Bỏ qua" trên mỗi dòng ẩn bài đó (lưu ở cột `skipped_at`) và loại nó khỏi digest Telegram; bỏ tick "Ẩn bài đã bỏ qua" để xem lại và bấm "Hiện lại". Bài trùng không được lưu lại: trùng nội dung, hoặc trùng link khi tác giả sửa bài.
+Tab Bài viết mặc định chỉ hiển thị những bài mà lượt quét gần nhất mới thu được, mới nhất trước; lượt đó có thể là nút "Quét ngay" hoặc `fb-digest run`. Quét xong, bộ lọc "Chỉ bài mới quét" tự bật lại. Bỏ tick để xem toàn bộ bài đã lưu. Bộ lọc bạn điền (ví dụ "Điểm ≥") được nhớ cho lần mở sau. Nút "Bỏ qua" trên mỗi dòng ẩn bài đó (lưu ở cột `skipped_at`) và loại nó khỏi digest Telegram; bỏ tick "Ẩn bài đã bỏ qua" để xem lại và bấm "Hiện lại". Bài trùng không được lưu lại: trùng nội dung, hoặc trùng link khi tác giả sửa bài.
 
 Khi đã có nguồn, `fb-digest run` (kể cả khi timer chạy) cũng quét các nguồn này thay cho feed. Bỏ hết ☆ thì bot quay lại lướt feed như trước.
 
