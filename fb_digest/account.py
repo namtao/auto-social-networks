@@ -24,6 +24,10 @@ UNFRIEND = ("FriendingCometUnfriendMutation", "24028849793460009")
 UNFOLLOW_PAGE = ("usePageCometUnfollowMutation", "23977842521823837")
 LEAVE_FORUM = ("GroupCometLeaveForumMutation", "28493416426984190")
 LEAVE_GROUP = ("useGroupLeaveMutation", "38666184769662540")
+UNFOLLOW_GROUP = ("useGroupsCometUnfollowMutation", "9558102717592331")
+GROUP_NOTIFICATIONS = ("useGroupUpdateNotificationSettingsMutation", "9592033017510815")
+GROUP_PUSH = ("CometGroupPushNotifSettingMutation", "30276109298654831")
+GROUP_ATTRIBUTION = "CometGroupDiscussionRoot.react,comet.group,via_cold_start,,,,,"
 
 GROUPS_PAGE = "https://www.facebook.com/groups/joins/?nav_source=tab"
 FRIENDS_PAGE = "https://www.facebook.com/me/friends_all"
@@ -236,7 +240,7 @@ class Account:
               "__relay_internal__pv__GroupsCometGYSJUnifiedUnitCardImageHeightrelayprovider": 150,
               "__relay_internal__pv__GroupsCometGroupChatLazyLoadLastMessageSnippetrelayprovider": False}),
             (LEAVE_GROUP,
-             {"action_source": "COMET_GROUP_PAGE", "attribution_id_v2": "CometGroupDiscussionRoot.react,comet.group,via_cold_start,,,,,",
+             {"action_source": "COMET_GROUP_PAGE", "attribution_id_v2": GROUP_ATTRIBUTION,
               "group_id": group_id, "readd_policy": "ALLOW_READD"},
              {"groupID": group_id, "ordering": ["viewer_added"], "scale": 1}),
         )
@@ -254,3 +258,20 @@ class Account:
         # by an admin since the list was cached); that group is already gone.
         if any(n["id"] == group_id for n, _ in await self._joined_groups()):
             raise FacebookError(f"Rời nhóm {group_id} không thành công: {' | '.join(replies)[:300]}")
+
+    async def unfollow_group(self, group_id: str) -> None:
+        """Stay a member but stop seeing the group's posts in the feed."""
+        data = await self._mutate(UNFOLLOW_GROUP, {"attribution_id_v2": GROUP_ATTRIBUTION, "group_id": group_id,
+                                                   "subscribe_location": "PROFILE"})
+        if not data.get("group_unsubscribe"):
+            raise FacebookError(f"Bỏ theo dõi nhóm {group_id} không thành công: {json.dumps(data)[:200]}")
+
+    async def mute_group(self, group_id: str) -> None:
+        """Turn the group's notifications off, like picking "Tắt" under "Quản lý thông báo"."""
+        # The dialog saves the in-app level and the push level with two separate mutations.
+        data = await self._mutate(GROUP_NOTIFICATIONS, {"group_id": group_id, "setting": "OFF", "source": "comet_group_page"})
+        if not data.get("group_update_subscription_level"):
+            raise FacebookError(f"Tắt thông báo nhóm {group_id} không thành công: {json.dumps(data)[:200]}")
+        data = await self._mutate(GROUP_PUSH, {"group_id": group_id, "setting": "OFF"})
+        if not data.get("group_update_push_subscription_level"):
+            raise FacebookError(f"Tắt thông báo đẩy nhóm {group_id} không thành công: {json.dumps(data)[:200]}")

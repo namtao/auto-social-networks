@@ -72,7 +72,7 @@ Mỗi bài chỉ được gửi một lần. Một lượt với 30 bài mất k
 | Bài viết | Bài từ các nguồn đã chọn, mới nhất trước: thời gian, nguồn, điểm, tóm tắt, link | Chỉ bài mới quét, chỉ bài từ nguồn, điểm ≥ N, nguồn, ẩn quảng cáo | Quét ngay, có thể kèm gửi digest Telegram |
 | Bạn bè | Ảnh, tên, trạng thái, bạn chung, giới tính | Chỉ tài khoản đã khóa, bạn chung ≤ N, giới tính | Hủy kết bạn |
 | Trang | Ảnh, tên, loại trang, đã thích, xác minh | Chỉ nguồn quét, loại trang | Bỏ theo dõi, chọn làm nguồn quét |
-| Nhóm | Ảnh, tên, lần bạn vào cuối, bài mới nhất, quản trị | Chỉ nguồn quét, không vào ≥ N ngày, không có bài mới ≥ N ngày | Rời nhóm, chọn làm nguồn quét |
+| Nhóm | Ảnh, tên, lần bạn vào cuối, bài mới nhất, quản trị, đã bỏ theo dõi, đã tắt thông báo | Chỉ nguồn quét, không vào ≥ N ngày, không có bài mới ≥ N ngày | Rời nhóm, bỏ theo dõi, tắt thông báo, chọn làm nguồn quét |
 
 Bấm "Làm mới" để tải danh sách từ Facebook (vài giây với trang, khoảng 30 giây với bạn bè hoặc nhóm). Kết quả được lưu ở `data/manage/`. Nút gạt "Thao tác" ở góc phải chọn giữa nút ngay trên từng dòng và chế độ chọn nhiều dòng rồi làm một lần. "Xuất CSV" xuất các dòng đang chọn, hoặc toàn bộ dòng đang hiển thị nếu chưa chọn dòng nào.
 
@@ -92,7 +92,7 @@ Thời gian đăng lấy từ dữ liệu JSON mà Facebook gửi về trang (`c
 ### Lưu ý
 
 - **Tài khoản đã khóa:** là bạn bè vẫn có trong danh sách trên trang cá nhân nhưng Facebook không trả về trong danh sách bạn bè đang hoạt động.
-- **Thao tác:** chạy lần lượt, mỗi thao tác cách nhau 3–7 giây, và tự dừng ở lỗi đầu tiên vì lỗi thường là do Facebook đang hạn chế tài khoản. Các thao tác này không hoàn tác được. Nên xử lý vài chục mục mỗi lần, đừng xử lý cả trăm mục liền. Rời nhóm hoặc bỏ theo dõi một nguồn quét cũng bỏ nó khỏi danh sách nguồn.
+- **Thao tác:** chạy lần lượt, mỗi thao tác cách nhau 3–7 giây, và tự dừng ở lỗi đầu tiên vì lỗi thường là do Facebook đang hạn chế tài khoản. Hủy kết bạn, bỏ theo dõi trang và rời nhóm không hoàn tác được. Bỏ theo dõi nhóm (vẫn là thành viên nhưng không thấy bài trên bảng feed) và tắt thông báo nhóm (tắt cả thông báo trong Facebook lẫn thông báo đẩy) giữ nhóm trong danh sách và đánh dấu ✓ ở cột tương ứng; Facebook không cho biết trạng thái này khi tải danh sách, nên cột chỉ ghi những gì đã làm từ trang quản lý. Muốn bật lại thì làm trên Facebook. Nên xử lý vài chục mục mỗi lần, đừng xử lý cả trăm mục liền. Rời nhóm hoặc bỏ theo dõi một nguồn quét cũng bỏ nó khỏi danh sách nguồn.
 - **Bỏ theo dõi trang:** trang không còn hiện trên feed, nhưng lượt thích trang (nếu có) vẫn giữ nguyên.
 - **Chạy cùng lệnh khác:** trang quản lý dùng chung profile Chrome với bot. Khi đang mở trang quản lý, hãy quét bằng nút "Quét ngay" thay vì `fb-digest run`, và tắt trang quản lý (Ctrl+C) trước giờ timer chạy.
 

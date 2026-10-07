@@ -26,11 +26,16 @@ HOST, PORT = "127.0.0.1", 8765
 CACHE_DIR = DATA_DIR / "manage"
 PAGE = Path(__file__).with_name("manager.html")
 ACTION_DELAY = (3, 7)  # seconds between two actions
-# list kind -> (Account method, label shown in the UI)
+# list kind -> {Account method: (label shown in the UI, flag)}. An action without a flag removes the
+# item from the list; one with a flag keeps it and sets that flag, which survives a refresh.
 ACTIONS = {
-    "friends": ("unfriend", "Hủy kết bạn"),
-    "pages": ("unfollow_page", "Bỏ theo dõi"),
-    "groups": ("leave_group", "Rời nhóm"),
+    "friends": {"unfriend": ("Hủy kết bạn", None)},
+    "pages": {"unfollow_page": ("Bỏ theo dõi", None)},
+    "groups": {
+        "leave_group": ("Rời nhóm", None),
+        "unfollow_group": ("Bỏ theo dõi", "unfollowed"),
+        "mute_group": ("Tắt thông báo", "muted"),
+    },
 }
 SOURCE_KINDS = {"pages": "page", "groups": "group"}
 
@@ -93,7 +98,13 @@ class Manager:
     async def refresh(self, kind: str) -> dict:
         async with self.lock:
             await self._ready()
-            return save(kind, await getattr(self.account, kind)())
+            items = await getattr(self.account, kind)()
+        # The lists from Facebook do not say whether a group is followed or muted.
+        old = {i["id"]: i for i in load(kind)["items"]}
+        flags = [flag for _, flag in ACTIONS[kind].values() if flag]
+        for i in items:
+            i.update({f: True for f in flags if old.get(i["id"], {}).get(f)})
+        return save(kind, items)
 
     def _launch(self, kind: str, label: str, total: int, coro) -> dict:
         if self.job.get("running"):
@@ -115,13 +126,15 @@ class Manager:
             job["running"] = False
             job["current"] = ""
 
-    def start_actions(self, kind: str, ids: list[str]) -> dict:
-        return self._launch(kind, ACTIONS[kind][1], len(ids), self._run_actions(kind, ids))
+    def start_actions(self, kind: str, method: str, ids: list[str]) -> dict:
+        if method not in ACTIONS[kind]:
+            raise RuntimeError(f"Thao tác không hợp lệ: {method}")
+        return self._launch(kind, ACTIONS[kind][method][0], len(ids), self._run_actions(kind, method, ids))
 
-    async def _run_actions(self, kind: str, ids: list[str]) -> None:
+    async def _run_actions(self, kind: str, method: str, ids: list[str]) -> None:
         job = self.job
         names = {i["id"]: i["name"] for i in load(kind)["items"]}
-        action = getattr(self.account, ACTIONS[kind][0])
+        action, flag = getattr(self.account, method), ACTIONS[kind][method][1]
         for n, item_id in enumerate(ids):
             if job["cancel"]:
                 break
@@ -133,6 +146,12 @@ class Manager:
                 await action(item_id)  # raises on the first failure: usually Facebook throttling
             job["done"] += 1
             cache = load(kind)
+            if flag:
+                for i in cache["items"]:
+                    if i["id"] == item_id:
+                        i[flag] = True
+                save(kind, cache["items"], cache["updated"])
+                continue
             save(kind, [i for i in cache["items"] if i["id"] != item_id], cache["updated"])
             if kind in SOURCE_KINDS:
                 set_sources(kind, [item_id], on=False)
@@ -248,7 +267,7 @@ def _handler(mgr: Manager):
                         return self._json(200, mgr.run(mgr.refresh(parts[1])))
                     if parts[2] == "action":
                         ids = [str(i) for i in body.get("ids") or []]
-                        return self._json(200, mgr.start_actions(parts[1], ids))
+                        return self._json(200, mgr.start_actions(parts[1], str(body.get("method")), ids))
                 self._json(404, {"error": "not found"})
             except Exception as exc:
                 log.exception("Request %s failed", self.path)

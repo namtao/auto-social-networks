@@ -106,7 +106,7 @@
     <span id="bulk-box">
       <button class="btn" id="src-on" hidden>★ Thêm vào nguồn quét</button>
       <button class="btn" id="src-off" hidden>☆ Bỏ khỏi nguồn quét</button>
-      <button class="btn danger" id="act" disabled></button>
+      <span id="acts"></span>
     </span>
     <button class="btn" id="export">Xuất CSV</button>
   </div>
@@ -150,7 +150,7 @@ const KINDS = {
     ],
   },
   friends: {
-    label: 'Bạn bè', action: 'Hủy kết bạn', search: ['name'],
+    label: 'Bạn bè', actions: { unfriend: { label: 'Hủy kết bạn', danger: true } }, search: ['name'],
     columns: [
       { key: 'avatar', label: '', nosort: true, render: (r) => avatar(r) },
       { key: 'name', label: 'Tên', render: nameLink },
@@ -166,7 +166,7 @@ const KINDS = {
     ],
   },
   pages: {
-    label: 'Trang', action: 'Bỏ theo dõi', source: 'page', search: ['name', 'category'],
+    label: 'Trang', actions: { unfollow_page: { label: 'Bỏ theo dõi', danger: true } }, source: 'page', search: ['name', 'category'],
     columns: [
       { key: 'avatar', label: '', nosort: true, render: (r) => avatar(r) },
       { key: 'name', label: 'Tên', render: nameLink },
@@ -181,13 +181,21 @@ const KINDS = {
     ],
   },
   groups: {
-    label: 'Nhóm', action: 'Rời nhóm', source: 'group', search: ['name'],
+    label: 'Nhóm', source: 'group', search: ['name'],
+    // "flag" is set on a row once the action succeeded; the row then stays in the list.
+    actions: {
+      leave_group: { label: 'Rời nhóm', danger: true },
+      unfollow_group: { label: 'Bỏ theo dõi', flag: 'unfollowed' },
+      mute_group: { label: 'Tắt thông báo', flag: 'muted' },
+    },
     columns: [
       { key: 'avatar', label: '', nosort: true, render: (r) => avatar(r, true) },
       { key: 'name', label: 'Tên', wrap: true, render: nameLink },
       { key: 'visited_days', label: 'Bạn vào lần cuối', num: true, render: (r) => esc(r.visited) },
       { key: 'last_post_days', label: 'Bài mới nhất', num: true, render: (r) => daysText(r.last_post_days) },
       { key: 'admin', label: 'Quản trị', render: (r) => r.admin ? '✓' : '' },
+      { key: 'unfollowed', label: 'Đã bỏ theo dõi', render: (r) => r.unfollowed ? '✓' : '' },
+      { key: 'muted', label: 'Đã tắt thông báo', render: (r) => r.muted ? '✓' : '' },
       { key: 'id', label: 'ID' },
     ],
     filters: [
@@ -309,14 +317,15 @@ function render() {
       if (bulk) cells.push(`<td><input type="checkbox" data-select ${sel.has(r.id) ? 'checked' : ''}></td>`);
       if (kind.source) { const on = isSource(r); cells.push(`<td><button class="star ${on ? 'on' : ''}" data-star title="${on ? 'Bỏ khỏi nguồn quét' : 'Thêm vào nguồn quét'}">${on ? '★' : '☆'}</button></td>`); }
       cells.push(...cols.map((c) => `<td class="${c.num ? 'num' : ''} ${c.wrap ? 'wrap' : ''}">${c.render ? c.render(r) : esc(r[c.key])}</td>`));
-      if (rowActions) cells.push(`<td><button class="btn small outline-danger" data-act ${jobRunning ? 'disabled' : ''}>${kind.action}</button></td>`);
+      if (rowActions) cells.push(`<td>${Object.entries(kind.actions).map(([m, a]) =>
+        `<button class="btn small ${a.danger ? 'outline-danger' : ''}" data-act="${m}" ${jobRunning || r[a.flag] ? 'disabled' : ''}>${a.label}</button>`).join(' ')}</td>`);
       return `<tr class="${bulk && sel.has(r.id) ? 'selected' : ''}" data-id="${esc(r.id)}">${cells.join('')}</tr>`;
     }).join('');
   }
   const total = data?.items?.length || 0;
   $('count').textContent = `Hiển thị ${list.length}/${total}` + (bulk ? ` · Đã chọn ${sel.size}` : '');
-  $('act').textContent = `${kind.action || ''}${sel.size ? ` (${sel.size})` : ''}`;
-  $('act').disabled = !sel.size || jobRunning;
+  $('acts').innerHTML = Object.entries(kind.actions || {}).map(([m, a]) =>
+    `<button class="btn ${a.danger ? 'danger' : ''}" data-act="${m}" ${!sel.size || jobRunning ? 'disabled' : ''}>${a.label}${sel.size ? ` (${sel.size})` : ''}</button>`).join(' ');
   $('src-on').disabled = $('src-off').disabled = !sel.size;
   $('scan').disabled = jobRunning;
 }
@@ -363,11 +372,13 @@ async function skipPost(row) {
   try { await api('posts/skip', { ids: [row.id], skip: !row.skipped }); row.skipped = !row.skipped; render(); }
   catch (err) { showError(err.message); }
 }
-async function runAction(ids, what) {
-  const kind = KINDS[state.kind];
-  if (!confirm(`${kind.action} ${what}?\n\nKhông hoàn tác được.` + (ids.length > 1 ? ' Mỗi thao tác cách nhau 3–7 giây; tác vụ tự dừng nếu Facebook báo lỗi.' : ''))) return;
+async function runAction(method, ids, what) {
+  const action = KINDS[state.kind].actions[method];
+  const notes = [action.danger && 'Không hoàn tác được.',
+                 ids.length > 1 && 'Mỗi thao tác cách nhau 3–7 giây; tác vụ tự dừng nếu Facebook báo lỗi.'].filter(Boolean);
+  if (!confirm(`${action.label} ${what}?` + (notes.length ? '\n\n' + notes.join(' ') : ''))) return;
   showError('');
-  try { await api(`${state.kind}/action`, { ids }); state.selected[state.kind].clear(); pollJob(); }
+  try { await api(`${state.kind}/action`, { method, ids }); state.selected[state.kind].clear(); pollJob(); }
   catch (err) { showError(err.message); }
 }
 
@@ -409,13 +420,17 @@ $('tbody').addEventListener('click', (e) => {
   const id = tr.dataset.id, row = state.data[state.kind].items.find((r) => String(r.id) === id);
   if (e.target.closest('[data-skip]')) return skipPost(row);
   if (e.target.closest('[data-star]')) return setSources([id], !isSource(row));
-  if (e.target.closest('[data-act]')) return runAction([id], `“${row.name}”`);
+  const act = e.target.closest('[data-act]');
+  if (act) return runAction(act.dataset.act, [id], `“${row.name}”`);
   if (state.mode !== 'bulk' || KINDS[state.kind].readonly) return;
   const sel = state.selected[state.kind];
   sel.has(id) ? sel.delete(id) : sel.add(id);
   render();
 });
-$('act').addEventListener('click', () => runAction([...state.selected[state.kind]], `${state.selected[state.kind].size} mục`));
+$('acts').addEventListener('click', (e) => {
+  const m = e.target.closest('[data-act]')?.dataset.act;
+  if (m) runAction(m, [...state.selected[state.kind]], `${state.selected[state.kind].size} mục`);
+});
 $('src-on').addEventListener('click', () => setSources([...state.selected[state.kind]], true));
 $('src-off').addEventListener('click', () => setSources([...state.selected[state.kind]], false));
 $('refresh').addEventListener('click', async () => {
