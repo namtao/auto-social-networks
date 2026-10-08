@@ -17,6 +17,42 @@ Telegram                          digest bài score ≥ ngưỡng, cảnh báo  
 
 Quảng cáo trả tiền bị bỏ ngay lúc thu bài; bài bán hàng còn lại được LLM gắn cờ `is_ad` và loại khỏi digest. Bài gợi ý từ các trang bạn chưa theo dõi vẫn được giữ và chấm điểm theo nội dung.
 
+## Extension Chrome
+
+Thư mục [extension/](extension/) là bản extension (Manifest V3) của cùng công cụ, dùng để chia sẻ cho người khác. Extension không cần Python, Postgres hay đăng nhập riêng: nó dùng luôn phiên Facebook mà người dùng đang đăng nhập trên trình duyệt, và lưu mọi dữ liệu trong trình duyệt đó (IndexedDB và `chrome.storage.local`).
+
+**Cài:** mở `chrome://extensions`, bật Developer mode, bấm "Load unpacked" rồi chọn thư mục `extension/`. Bấm biểu tượng FB Digest để mở trang quản lý. Trang này có các tab Bài viết, Bạn bè, Trang, Nhóm giống `fb-digest manage`, và thêm tab Cài đặt.
+
+**Cài đặt trong extension:**
+
+- **LLM:** Base URL và model của bất kỳ API nào tương thích OpenAI (OmniRoute tại `http://localhost:20128`, OpenAI, OpenRouter, Ollama…); API key để trống được nếu router không yêu cầu. Nhập URL rồi bấm "Tải model": extension đọc `<URL>/v1/models` (hoặc `<URL>/models`), tự thêm `/v1` vào URL nếu cần, rồi gợi ý tên model khi gõ. Chỉ khi có URL và model thì bài mới được chấm điểm; nếu chưa, extension vẫn quét và hiện bài. Lần đầu dùng một địa chỉ mới, Chrome sẽ hỏi quyền truy cập địa chỉ đó.
+- **Sở thích:** thay cho `interests.txt`.
+- **Telegram:** bot token và chat ID, không bắt buộc.
+- **Tự động chạy:** giờ chạy, lệch ngẫu nhiên tối đa 30 phút. Extension chỉ chạy khi trình duyệt đang mở; lượt bị lỡ được chạy bù khi mở lại trình duyệt.
+
+**Khác với bản Python:**
+
+- Khi chưa chọn nguồn, "Quét ngay" lấy khoảng 60 bài trên feed trang chủ qua query `CometNewsFeedPaginationQuery`, chạy ngầm và có giờ đăng chính xác, thay cho việc cuộn feed của `fb-digest run`.
+- Làm mới Bạn bè, Trang, Nhóm, các thao tác dọn danh sách và quét nguồn đều chạy ngầm trong service worker, không mở tab hay cửa sổ nào. Service worker gửi request bằng cookie Facebook của trình duyệt; một rule `declarativeNetRequest` chỉ áp cho request của chính extension đặt `Origin`/`Referer` thành `https://www.facebook.com`, vì API của Facebook từ chối origin `chrome-extension://`.
+- Tab Nhóm đọc trạng thái thật từ Facebook ngay lần làm mới đầu: "lần vào cuối" (`GroupsCometAllJoinedGroupsSectionPaginationQuery`), đã bỏ theo dõi (`GroupsCometJoinedActionMenuQuery`) và đã tắt thông báo (`GroupsCometNotificationSettingsEditDialogQuery`, tắt cả thông báo trong ứng dụng lẫn thông báo đẩy).
+- Chỉ khi mọi mẫu query lấy bài đã biết đều hỏng, extension mới mở một cửa sổ Facebook nhỏ để cuộn feed trang chủ hoặc trang nguồn. Việc cuộn làm Facebook gửi query hiện tại; extension học mẫu đó rồi đọc bài lại qua API.
+
+### doc_id của Facebook
+
+Mỗi thao tác có tối đa ba nguồn `doc_id`, và mã mới nhất được thử trước. Nếu Facebook từ chối, extension thử mã tiếp theo:
+
+1. **Tự học:** extension đọc các request GraphQL mà chính web Facebook gửi khi người dùng lướt bình thường (`chrome.webRequest`), và lưu `doc_id` theo `fb_api_req_friendly_name`. Với query lấy bài của nhóm và trang, extension lưu cả `variables` để dùng làm mẫu. Request do extension tự gửi thì không được học. Khi mọi mẫu lấy bài đều hỏng, extension mở trang nguồn trong cửa sổ nhỏ và cuộn để Facebook gửi query mới, rồi học từ đó.
+2. **Cấu hình từ xa:** file [extension/ops.json](extension/ops.json) được tải từ `remoteOpsUrl` khi khởi động và mỗi 6 giờ. Khi Facebook đổi mã một thao tác mà người dùng ít khi tự làm (rời nhóm, hủy kết bạn…), chỉ cần sửa file này là mọi người dùng nhận mã mới, không cần phát hành bản mới. Mặc định URL trỏ tới [Gist public này](https://gist.github.com/namtao/e88f19c9790479f84d21da4392c896bd), nên repo vẫn để private được. Sau khi sửa `extension/ops.json` (nhớ đổi cả `updated`, vì mã mới nhất được thử trước), đẩy file lên Gist bằng:
+
+   ```bash
+   gh gist edit e88f19c9790479f84d21da4392c896bd --filename ops.json extension/ops.json
+   ```
+
+   GitHub có thể cache link raw vài phút trước khi trả về bản mới.
+3. **Kèm extension:** cũng là `extension/ops.json`, đóng gói lúc cài.
+
+Tab Cài đặt hiển thị mã đang dùng của từng thao tác và nguồn của mã đó.
+
 ## Yêu cầu
 
 - Linux có Google Chrome (hoặc Brave/Edge)

@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "FB Digest",
+  "version": "0.1.0",
+  "description": "Dọn bạn bè, trang, nhóm Facebook; quét bài từ nguồn bạn chọn, chấm điểm bằng LLM và gửi digest Telegram.",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "FB Digest",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "alarms",
+    "scripting",
+    "webRequest",
+    "declarativeNetRequestWithHostAccess"
+  ],
+  "host_permissions": [
+    "https://*.facebook.com/*",
+    "https://api.telegram.org/*",
+    "https://gist.githubusercontent.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ]
+}

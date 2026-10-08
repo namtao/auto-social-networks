@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FB Digest</title>
+<link rel="icon" href="icons/icon-48.png">
+<style>
+  :root {
+    --bg: #f4f6fb; --panel: #ffffff; --panel-2: #f8fafc; --text: #0f172a; --muted: #64748b; --line: #e2e8f0;
+    --accent: #2563eb; --accent-soft: #eff4ff; --accent-text: #ffffff;
+    --danger: #dc2626; --danger-soft: #fef2f2;
+    --warn: #b45309; --warn-soft: #fffbeb;
+    --good: #15803d; --good-soft: #ecfdf3;
+    --star: #f59e0b; --row-hover: #f8faff; --row-selected: #eef4ff;
+    --shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 4px 16px rgba(15, 23, 42, .06);
+    --radius: 14px;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; }
+
+  /* Header */
+  header { position: sticky; top: 0; z-index: 5; background: rgba(255, 255, 255, .92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+  .header-in { max-width: 1320px; margin: 0 auto; padding: 10px 24px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 10px; margin-right: 8px; }
+  .brand img { width: 32px; height: 32px; border-radius: 9px; }
+  .brand b { font-size: 16px; letter-spacing: -.01em; display: block; line-height: 1.2; }
+  .brand small { color: var(--muted); font-size: 12px; }
+  nav#tabs { display: flex; gap: 4px; background: var(--panel-2); border: 1px solid var(--line); padding: 4px; border-radius: 12px; flex-wrap: wrap; }
+  .tab { border: 0; background: none; color: var(--muted); padding: 7px 14px; border-radius: 9px; font: inherit; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .tab:hover { color: var(--text); }
+  .tab[aria-selected="true"] { background: var(--panel); color: var(--accent); box-shadow: 0 1px 3px rgba(15, 23, 42, .1); }
+  .tab .n { font-size: 12px; font-weight: 600; background: var(--line); color: var(--muted); border-radius: 999px; padding: 0 7px; }
+  .tab[aria-selected="true"] .n { background: var(--accent-soft); color: var(--accent); }
+  .grow { flex: 1; }
+  .mode-wrap { display: flex; align-items: center; gap: 8px; }
+  .seg { display: inline-flex; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .seg button { border: 0; background: none; color: var(--muted); padding: 5px 12px; border-radius: 7px; font: inherit; font-weight: 600; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(15, 23, 42, .12); }
+
+  main { padding: 20px 24px 48px; max-width: 1320px; margin: 0 auto; }
+  .meta { color: var(--muted); font-size: 13px; }
+
+  /* Buttons and inputs */
+  input, select, button, textarea { font: inherit; color: var(--text); }
+  .btn { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 7px 14px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; transition: background .15s, border-color .15s; }
+  .btn:hover:not(:disabled) { border-color: #cbd5e1; background: var(--panel-2); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); box-shadow: 0 1px 2px rgba(37, 99, 235, .3); }
+  .btn.primary:hover:not(:disabled) { background: #1d4ed8; border-color: #1d4ed8; }
+  .btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .btn.danger:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; }
+  .btn.small { padding: 3px 10px; font-size: 13px; border-radius: 8px; }
+  .btn.outline-danger { color: var(--danger); border-color: #fecaca; }
+  .btn.outline-danger:hover:not(:disabled) { background: var(--danger-soft); border-color: #fca5a5; }
+  input[type="search"], input[type="number"], select { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 3px rgba(37, 99, 235, .15); outline: none; }
+  input[type="search"] { min-width: 280px; padding-left: 34px; background: var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 11px center; }
+  input[type="number"] { width: 72px; }
+  input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
+
+  /* Toolbar */
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .toolbar { padding: 12px 14px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  #filters { display: contents; }
+  label.filter { display: inline-flex; gap: 7px; align-items: center; color: var(--text); font-size: 13px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; cursor: pointer; user-select: none; }
+  label.filter:has(input[type="number"]), label.filter:has(select) { padding: 2px 3px 2px 12px; }
+  label.filter input[type="number"], label.filter select { border-radius: 999px; padding: 2px 8px; }
+  label.filter:has(input[type="checkbox"]:checked) { background: var(--accent-soft); border-color: #bfd3ff; color: #1e40af; }
+  label.filter:has(input:disabled) { opacity: .55; cursor: default; }
+  .scan { display: inline-flex; gap: 8px; align-items: center; }
+
+  /* Notices */
+  .notice { padding: 12px 14px; border-radius: 12px; margin-bottom: 14px; background: var(--warn-soft); color: var(--warn); border: 1px solid #fde68a; }
+  .notice.error { color: var(--danger); background: var(--danger-soft); border-color: #fecaca; }
+  .notice.info { background: var(--accent-soft); color: #1e3a8a; border-color: #bfd3ff; }
+  #job { background: var(--panel); color: var(--text); border-color: var(--line); box-shadow: var(--shadow); }
+  .progress { height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; flex: 1; min-width: 140px; }
+  .progress > div { height: 100%; background: linear-gradient(90deg, #60a5fa, #2563eb); width: 0; transition: width .3s; border-radius: 999px; }
+
+  /* Table */
+  .listhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 2px 10px; }
+  .table-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow-x: auto; box-shadow: var(--shadow); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.wrap { white-space: normal; min-width: 280px; }
+  th { position: sticky; top: 0; background: var(--panel-2); color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; cursor: pointer; user-select: none; }
+  th.nosort { cursor: default; }
+  tbody tr:hover { background: var(--row-hover); }
+  tbody tr.selected { background: var(--row-selected); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  /* Row buttons stay in view when the table scrolls sideways. */
+  td.actions, th.actions { position: sticky; right: 0; background: var(--panel); box-shadow: -8px 0 12px -10px rgba(15, 23, 42, .25); }
+  th.actions { background: var(--panel-2); }
+  tbody tr:hover td.actions { background: var(--row-hover); }
+  tbody tr.selected td.actions { background: var(--row-selected); }
+  td.actions .btn + .btn { margin-left: 4px; }
+  .av { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: var(--line); display: block; }
+  .av.square { border-radius: 9px; }
+  .badge { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--warn-soft); color: var(--warn); border: 1px solid #fde68a; }
+  .badge.good { background: var(--good-soft); color: var(--good); border-color: #bbf7d0; }
+  .star { border: 0; background: none; font-size: 19px; line-height: 1; cursor: pointer; color: #cbd5e1; padding: 2px 4px; }
+  .star:hover, .star.on { color: var(--star); }
+  .post-text { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .empty { padding: 56px 16px; text-align: center; color: var(--muted); }
+
+  /* Settings */
+  #settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 16px; align-items: start; }
+  .card { padding: 18px 20px; }
+  .card.wide { grid-column: 1 / -1; }
+  .card h2 { font-size: 15px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+  .card h2 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .card p { margin: 0 0 14px; }
+  .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; color: var(--muted); font-size: 13px; font-weight: 500; }
+  .field input:not([type="checkbox"]), .field textarea { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 11px; font: inherit; color: var(--text); width: 100%; outline: none; }
+  .field textarea { min-height: 200px; resize: vertical; }
+  .field.inline { flex-direction: row; align-items: center; gap: 8px; color: var(--text); }
+  .row2 { display: flex; gap: 8px; align-items: center; }
+  .ok { color: var(--good); }
+  .err { color: var(--danger); }
+  #ops-body td { white-space: normal; word-break: break-all; font-size: 13px; }
+  .savebar { grid-column: 1 / -1; position: sticky; bottom: 12px; display: flex; gap: 12px; align-items: center; padding: 12px 16px; }
+  @media (max-width: 640px) {
+    .header-in, main { padding-left: 16px; padding-right: 16px; }
+    input[type="search"] { min-width: 0; width: 100%; }
+    #settings { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-in">
+    <div class="brand">
+      <img src="icons/icon-48.png" alt="">
+      <div><b>FB Digest</b><small>Lọc bài hay, dọn danh sách Facebook</small></div>
+    </div>
+    <nav id="tabs" role="tablist"></nav>
+    <span class="grow"></span>
+    <div class="mode-wrap">
+      <span class="meta" id="mode-label">Thao tác</span>
+      <span class="seg" id="mode">
+        <button data-mode="row">Từng dòng</button>
+        <button data-mode="bulk">Hàng loạt</button>
+      </span>
+    </div>
+  </div>
+</header>
+<main>
+  <div id="job" class="notice" hidden>
+    <div class="bar">
+      <span id="job-text"></span>
+      <div class="progress"><div id="job-bar"></div></div>
+      <button class="btn small" id="job-cancel">Dừng</button>
+    </div>
+  </div>
+  <div id="error" class="notice error" hidden></div>
+  <div id="list-view">
+    <div id="llm-notice" class="notice info" hidden>Chưa cấu hình LLM nên bài quét về chưa được chấm điểm. Điền URL và chọn model ở tab <a href="#" data-goto="settings">Cài đặt</a>.</div>
+    <div class="panel toolbar">
+      <div class="bar">
+        <input type="search" id="search" placeholder="Tìm theo tên, nội dung…">
+        <span class="grow"></span>
+        <span class="meta" id="updated"></span>
+        <span id="scan-box" class="scan" hidden>
+          <label class="filter"><input type="checkbox" id="scan-digest"> Gửi digest Telegram</label>
+          <button class="btn primary" id="scan">Quét ngay</button>
+        </span>
+        <button class="btn" id="refresh">Làm mới</button>
+      </div>
+      <div class="bar"><span id="filters"></span></div>
+    </div>
+    <div class="listhead">
+      <span class="meta" id="count"></span>
+      <span class="grow"></span>
+      <span id="bulk-box" class="bar">
+        <button class="btn" id="src-on" hidden>★ Thêm vào nguồn quét</button>
+        <button class="btn" id="src-off" hidden>☆ Bỏ khỏi nguồn quét</button>
+        <span id="acts"></span>
+      </span>
+      <button class="btn" id="export">Xuất CSV</button>
+    </div>
+    <div class="table-wrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+  </div>
+
+  <section id="settings" hidden>
+    <div class="panel card">
+      <h2><span class="dot"></span>Chấm điểm bằng LLM</h2>
+      <p class="meta">Dùng được mọi API tương thích OpenAI: OmniRoute hoặc router chạy trên máy, OpenAI, OpenRouter, Ollama… Nhập URL để tải danh sách model rồi chọn một model. Khi chưa có URL và model, extension vẫn quét và hiện bài nhưng không chấm điểm.</p>
+      <label class="field">Base URL
+        <span class="row2"><input id="s-llmUrl" placeholder="http://localhost:20128" spellcheck="false"><button class="btn" id="llm-models" type="button">Tải model</button></span>
+      </label>
+      <label class="field">API key <input id="s-llmKey" type="password" autocomplete="off" spellcheck="false" placeholder="Để trống nếu router không yêu cầu"></label>
+      <label class="field">Model<input id="s-llmModel" list="model-list" placeholder="Gõ để lọc danh sách model" spellcheck="false" autocomplete="off"></label>
+      <datalist id="model-list"></datalist>
+      <div class="meta" id="models-status" style="margin:-6px 0 12px"></div>
+      <div class="bar" style="margin-bottom:12px"><button class="btn" id="llm-test" type="button">Kiểm tra kết nối</button><span id="llm-test-result" class="meta"></span></div>
+      <label class="field">Điểm tối thiểu để vào digest (0–10)<input id="s-scoreThreshold" type="number" min="0" max="10" style="width:100px"></label>
+    </div>
+    <div class="panel card">
+      <h2><span class="dot"></span>Sở thích</h2>
+      <p class="meta">LLM chấm điểm từng bài theo nội dung này. Viết cả những chủ đề bạn muốn đọc lẫn không muốn đọc.</p>
+      <label class="field"><textarea id="s-interests" placeholder="Tôi quan tâm (điểm cao):
+- AI: model mới, so sánh giá và hiệu năng
+- Việc làm IT có mô tả cụ thể (vị trí, yêu cầu, mức lương)
+
+Tôi không quan tâm (điểm thấp):
+- Drama, bói toán, bán hàng"></textarea></label>
+    </div>
+    <div class="panel card">
+      <h2><span class="dot"></span>Quét bài</h2>
+      <p class="meta">Khi đã chọn nguồn (☆ ở tab Trang hoặc Nhóm), "Quét ngay" lấy bài mới của các nguồn đó. Khi chưa chọn nguồn nào, extension lấy khoảng 60 bài trên feed trang chủ qua API, chạy ngầm. Chỉ khi API của Facebook đổi mà chưa học được mã mới, extension mới mở một cửa sổ nhỏ để cuộn feed; cứ để cửa sổ đó chạy, nó tự đóng khi xong.</p>
+      <label class="field">Lấy bài trong bao nhiêu ngày gần nhất<input id="s-sourceDays" type="number" min="1" style="width:100px"></label>
+    </div>
+    <div class="panel card">
+      <h2><span class="dot"></span>Telegram <span class="meta">(không bắt buộc)</span></h2>
+      <p class="meta">Tạo bot với @BotFather, nhắn bot một tin, rồi mở <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> để lấy <code>chat.id</code> (nhóm có ID âm).</p>
+      <label class="field">Bot token<input id="s-telegramToken" type="password" autocomplete="off" spellcheck="false"></label>
+      <label class="field">Chat ID<input id="s-telegramChatId" spellcheck="false"></label>
+    </div>
+    <div class="panel card">
+      <h2><span class="dot"></span>Tự động chạy</h2>
+      <p class="meta">Quét, chấm điểm và gửi digest Telegram theo giờ, mỗi lần lệch ngẫu nhiên tối đa 30 phút. Chỉ chạy khi trình duyệt đang mở; lượt bị lỡ được chạy bù khi mở lại trình duyệt.</p>
+      <label class="field inline"><input type="checkbox" id="s-autoRun"> Bật tự động chạy</label>
+      <label class="field">Giờ chạy (cách nhau bằng dấu phẩy)<input id="s-runTimes" placeholder="08:00, 13:00, 20:00"></label>
+      <div class="meta" id="auto-run-status"></div>
+    </div>
+    <div class="panel card wide">
+      <h2><span class="dot"></span>doc_id của Facebook</h2>
+      <p class="meta">Facebook thỉnh thoảng đổi mã các thao tác. Extension tự học mã mới mỗi khi bạn dùng Facebook bình thường. Nếu chưa học được, nó dùng cấu hình tải từ URL bên dưới (tự cập nhật mỗi 6 giờ), rồi tới bản đi kèm extension. Mã mới nhất được thử trước.</p>
+      <label class="field">URL cấu hình từ xa (ops.json)<input id="s-remoteOpsUrl" spellcheck="false"></label>
+      <div class="bar" style="margin-bottom:12px"><button class="btn" id="ops-refresh" type="button">Cập nhật cấu hình</button><span id="ops-meta" class="meta"></span></div>
+      <div class="table-wrap"><table><thead><tr><th class="nosort">Thao tác</th><th class="nosort">Tên trên Facebook</th><th class="nosort">doc_id dùng trước</th><th class="nosort">Nguồn</th><th class="nosort">Dự phòng</th></tr></thead><tbody id="ops-body"></tbody></table></div>
+    </div>
+    <div class="panel savebar"><button class="btn primary" id="save">Lưu cài đặt</button><span id="save-result" class="meta"></span></div>
+  </section>
+</main>
+<script src="manager.js"></script>
+</body>
+</html>
