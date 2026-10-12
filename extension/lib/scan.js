@@ -7,7 +7,10 @@ import { bundledOps, feedCandidates, learnedAt } from './ops.js';
 
 const MIN_TEXT = 20; // photo-only posts give the LLM nothing to score
 const FAST_MAX_CALLS = 12; // per source, about 3 posts per call
-const SCAN_CONCURRENCY = 4;
+// Paced like a person reading one group after another: Facebook flags accounts that fire bursts
+// of GraphQL requests, so sources are scanned one at a time with pauses in between.
+const PAGE_DELAY = [2000, 5000]; // between two pages of the same feed
+const SOURCE_DELAY = [10000, 25000]; // between two sources
 const SOURCE_SCROLL_ROUNDS = 8;
 // Home feed
 const MAX_POSTS = 60;
@@ -70,7 +73,7 @@ async function fastScan(ctx, src, days, template) {
   if ('youthIntegrityHostID' in variables) variables.youthIntegrityHostID = nodeId;
   const found = {};
   for (let call = 0; call < FAST_MAX_CALLS; call++) {
-    if (call) await sleep(uniform(300, 800));
+    if (call) await sleep(uniform(...PAGE_DELAY));
     const reply = await graphql(ctx, template.name, template.doc_id, variables);
     const objs = [...jsonLines(reply.text)];
     if (reply.status !== 200 || !objs.length || (objs[0].errors && !objs[0].data)) {
@@ -143,35 +146,36 @@ function shuffle(list) {
   return a;
 }
 
-// Scan every source: fast path in parallel, slow path (one shared window) for any that fail.
-// onDone(src, posts) is awaited after each source; a failing source is logged and skipped.
+// Scan every source one after another: fast path first, then the slow path (one shared window)
+// for any that failed. onDone(src, posts) is awaited after each source; a failing source is
+// logged and skipped.
 export async function scanSources(ctx, sources, days, onDone, cancelled) {
   const started = Date.now();
   const failed = [];
-  const queue = shuffle(sources);
   const templates = {
     group: await feedCandidates('group'),
     page: await feedCandidates('page'),
   };
+  let scanned = 0;
+  const pause = () => (scanned++ ? sleep(uniform(...SOURCE_DELAY)) : null);
 
-  async function worker() {
-    for (let src = queue.shift(); src; src = queue.shift()) {
-      if (cancelled()) return;
-      try {
-        const got = await fastScanAny(ctx, src, days, templates[src.kind]);
-        await onDone(src, got);
-      } catch (err) {
-        console.warn(`Fast scan of ${src.name} failed; retrying by opening it`, err.message);
-        failed.push(src);
-      }
+  for (const src of shuffle(sources)) {
+    if (cancelled()) return;
+    await pause();
+    try {
+      const got = await fastScanAny(ctx, src, days, templates[src.kind]);
+      await onDone(src, got);
+    } catch (err) {
+      console.warn(`Fast scan of ${src.name} failed; retrying by opening it`, err.message);
+      failed.push(src);
     }
   }
-  await Promise.all(Array.from({ length: SCAN_CONCURRENCY }, worker));
 
   let win = null;
   try {
     for (const src of failed) {
       if (cancelled()) break;
+      await pause();
       let got = null;
       // A template learned during this scan (by an earlier slow scan) may fix the fast path.
       const fresh = (await feedCandidates(src.kind)).filter((t) => t.from === 'learned' && t.at > started);
@@ -244,7 +248,7 @@ async function homeFeedApi(ctx, template, onProgress, cancelled) {
   const found = {};
   let cursor = null;
   for (let call = 0; call < HOME_MAX_CALLS && !cancelled(); call++) {
-    if (call) await sleep(uniform(800, 1800));
+    if (call) await sleep(uniform(...PAGE_DELAY));
     // A fresh query id and no "recently viewed" list, as on a fresh page load.
     const variables = { ...template.variables, cursor, recentVPVs: [], clientQueryId: crypto.randomUUID() };
     const reply = await graphql(ctx, template.name, template.doc_id, variables);

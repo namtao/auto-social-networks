@@ -299,7 +299,10 @@ async def scan_source(tab, src: dict, days: int, templates: dict | None = None) 
 FEED_QUERIES = {"group": "GroupsCometFeedRegularStoriesPaginationQuery", "page": "ProfileCometTimelineFeedRefetchQuery"}
 FEED_TEMPLATES_FILE = SOURCES_FILE.with_name("feed_queries.json")
 FAST_MAX_CALLS = 12  # per source, i.e. about 36 posts
-SCAN_CONCURRENCY = 4
+# Paced like a person reading one group after another: Facebook flags accounts that fire bursts
+# of GraphQL requests, so sources are scanned one at a time with pauses in between.
+PAGE_DELAY = (2, 5)  # seconds between two pages of the same feed
+SOURCE_DELAY = (10, 25)  # seconds between two sources
 
 GRAPHQL_JS = r"""
 (async (name, docId, variables) => {
@@ -367,7 +370,7 @@ async def fast_scan(tab, src: dict, days: int, template: dict) -> list[dict]:
     found: dict = {}
     for call in range(FAST_MAX_CALLS):
         if call:
-            await asyncio.sleep(random.uniform(0.3, 0.8))
+            await asyncio.sleep(random.uniform(*PAGE_DELAY))
         reply = await graphql(tab, template["name"], template["doc_id"], variables)
         objs = list(_json_lines(reply["text"]))
         if reply["status"] != 200 or not objs or (objs[0].get("errors") and not objs[0].get("data")):
@@ -388,7 +391,7 @@ async def fast_scan(tab, src: dict, days: int, template: dict) -> list[dict]:
 
 
 async def scan_sources(tab, sources: list[dict], days: int, on_done=None, cancelled=lambda: False) -> list[dict]:
-    """Scan every source; fast path in parallel where a learned template exists, slow path otherwise.
+    """Scan every source one after another; fast path where a learned template exists, slow path otherwise.
 
     on_done(src, posts) is awaited after each source; a failing source is logged and skipped.
     """
@@ -401,7 +404,16 @@ async def scan_sources(tab, sources: list[dict], days: int, on_done=None, cancel
         if on_done:
             await on_done(src, got)
 
+    scanned = 0
+
+    async def pause():
+        nonlocal scanned
+        if scanned:
+            await asyncio.sleep(random.uniform(*SOURCE_DELAY))
+        scanned += 1
+
     async def slow(src):
+        await pause()
         try:
             got = await scan_source(tab, src, days, learned)
             log.info("Scanned %s (browser): %d posts", src["name"], len(got))
@@ -418,23 +430,20 @@ async def scan_sources(tab, sources: list[dict], days: int, on_done=None, cancel
             order.remove(src)
             await slow(src)
 
-    gate = asyncio.Semaphore(SCAN_CONCURRENCY)
     fallback = []
+    for src in [s for s in order if s["kind"] in learned]:
+        if cancelled():
+            break
+        await pause()
+        try:
+            got = await fast_scan(tab, src, days, learned[src["kind"]])
+            log.info("Scanned %s: %d posts", src["name"], len(got))
+            await finish(src, got)
+        except Exception as exc:
+            log.warning("Fast scan of %s failed (%s); retrying in the browser", src["name"], exc)
+            fallback.append(src)
 
-    async def fast(src):
-        async with gate:
-            if cancelled():
-                return
-            try:
-                got = await fast_scan(tab, src, days, learned[src["kind"]])
-                log.info("Scanned %s: %d posts", src["name"], len(got))
-                await finish(src, got)
-            except Exception as exc:
-                log.warning("Fast scan of %s failed (%s); retrying in the browser", src["name"], exc)
-                fallback.append(src)
-
-    await asyncio.gather(*(fast(s) for s in order if s["kind"] in learned))
-    # Sources whose kind never got a template, or whose fast scan failed, share the one tab: serial.
+    # Sources whose kind never got a template, or whose fast scan failed, open in the tab.
     for src in [s for s in order if s["kind"] not in learned] + fallback:
         if cancelled():
             break

@@ -270,8 +270,8 @@ async function skipPost(row) {
 }
 async function runAction(method, ids, what) {
   const action = KINDS[state.kind].actions[method];
-  const notes = [action.danger && 'Không hoàn tác được.',
-                 ids.length > 1 && 'Mỗi thao tác cách nhau 3–7 giây; tác vụ tự dừng nếu Facebook báo lỗi.'].filter(Boolean);
+  const notes = [action.danger && 'Không hoàn tác được.', 'Tối đa 10 thao tác mỗi ngày.',
+                 ids.length > 1 && 'Mỗi thao tác cách nhau 30–90 giây; tác vụ tự dừng nếu Facebook báo lỗi.'].filter(Boolean);
   if (!confirm(`${action.label} ${what}?` + (notes.length ? '\n\n' + notes.join(' ') : ''))) return;
   showError('');
   try { await api(`${state.kind}/action`, { method, ids }); state.selected[state.kind].clear(); pollJob(); }

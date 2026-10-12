@@ -8,6 +8,7 @@ operation, and the new doc_id can be read from the browser's network tab.
 
 import base64
 import json
+import random
 import re
 import time
 
@@ -110,7 +111,7 @@ class Account:
             cursor = info.get("end_cursor") or (edges[-1].get("cursor") if edges else None)
             if not edges or not cursor or info.get("has_next_page") is False:
                 break
-            await self.tab.sleep(0.5)
+            await self.tab.sleep(random.uniform(1, 2.5))  # one page at a time: Facebook flags request bursts
         return nodes
 
     async def friends(self) -> list[dict]:

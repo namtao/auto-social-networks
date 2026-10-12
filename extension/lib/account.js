@@ -4,6 +4,9 @@
 import { FB, FacebookError, fetchPage, first, gql, sleep, uniform } from './fb.js';
 
 const GROUP_ATTRIBUTION = 'CometGroupDiscussionRoot.react,comet.group,via_cold_start,,,,,';
+// Facebook flags accounts that fire bursts of GraphQL requests, so list reads go one at a time.
+const LIST_PAGE_DELAY = [1000, 2500];
+const GROUP_STATUS_DELAY = [1500, 3000];
 
 // "8 giờ trước", "3 tuần trước"… from a unix time, like Facebook's "Lần truy cập gần đây nhất".
 function agoText(unix) {
@@ -24,7 +27,7 @@ async function paginate(ctx, key, variables, connection) {
     const info = conn.page_info || {};
     cursor = info.end_cursor || (edges.length ? edges.at(-1).cursor : null);
     if (!edges.length || !cursor || info.has_next_page === false) break;
-    await sleep(500);
+    await sleep(uniform(...LIST_PAGE_DELAY));
   }
   return nodes;
 }
@@ -131,36 +134,31 @@ export async function groups(ctx) {
   return [...byId.values()];
 }
 
-const STATUS_CONCURRENCY = 4;
-
 // The joined-groups list does not say whether a group is followed or muted; each group's
 // "Đã tham gia" menu and its notification dialog do, through one small query each.
 async function readGroupSettings(ctx, groups) {
-  const queue = [...groups];
   let ok = 0;
   let failed = 0;
-  async function worker() {
-    for (let g = queue.shift(); g; g = queue.shift()) {
-      // Every call failing means Facebook rotated these doc_ids: stop rather than send 2 x N errors.
-      if (failed >= 3 && !ok) return;
-      try {
-        const follow = await gql(ctx, 'group_follow_status', { groupID: g.id },
-          (d) => first(d, 'if_viewer_can_change_follow_setting', (v) => v?.subscribe_status));
-        g.unfollowed = first(follow, 'if_viewer_can_change_follow_setting', (v) => v?.subscribe_status).subscribe_status === 'CAN_SUBSCRIBE';
-        const notif = await gql(ctx, 'group_notification_settings', { groupID: g.id },
-          (d) => first(d, 'viewer_subscription_level', (v) => typeof v === 'string'));
-        // Muted the way mute_group does it: in-app and push notifications both off.
-        g.muted = first(notif, 'viewer_subscription_level', (v) => typeof v === 'string') === 'OFF'
-          && first(notif, 'viewer_push_subscription_level', (v) => typeof v === 'string') === 'OFF';
-        ok++;
-      } catch (err) {
-        failed++;
-        console.warn(`Reading settings of group ${g.name} failed`, err.message);
-      }
-      await sleep(uniform(200, 500));
+  for (const g of groups) {
+    // Every call failing means Facebook rotated these doc_ids: stop rather than send 2 x N errors.
+    if (failed >= 3 && !ok) return;
+    try {
+      const follow = await gql(ctx, 'group_follow_status', { groupID: g.id },
+        (d) => first(d, 'if_viewer_can_change_follow_setting', (v) => v?.subscribe_status));
+      g.unfollowed = first(follow, 'if_viewer_can_change_follow_setting', (v) => v?.subscribe_status).subscribe_status === 'CAN_SUBSCRIBE';
+      await sleep(uniform(...GROUP_STATUS_DELAY));
+      const notif = await gql(ctx, 'group_notification_settings', { groupID: g.id },
+        (d) => first(d, 'viewer_subscription_level', (v) => typeof v === 'string'));
+      // Muted the way mute_group does it: in-app and push notifications both off.
+      g.muted = first(notif, 'viewer_subscription_level', (v) => typeof v === 'string') === 'OFF'
+        && first(notif, 'viewer_push_subscription_level', (v) => typeof v === 'string') === 'OFF';
+      ok++;
+    } catch (err) {
+      failed++;
+      console.warn(`Reading settings of group ${g.name} failed`, err.message);
     }
+    await sleep(uniform(...GROUP_STATUS_DELAY));
   }
-  await Promise.all(Array.from({ length: STATUS_CONCURRENCY }, worker));
 }
 
 function mutate(ctx, key, input, extra = {}, accept) {

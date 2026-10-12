@@ -11,7 +11,9 @@ import { getSettings, getSources, llmReady, saveSettings, saveSources, telegramR
 import * as telegram from './lib/telegram.js';
 
 const MANAGER = chrome.runtime.getURL('manager.html');
-const ACTION_DELAY = [3000, 7000]; // between two actions: Facebook throttles accounts that act in bursts
+// Facebook flags accounts that unfriend/leave/unfollow in bulk, so actions go slowly and in small daily batches.
+const ACTION_DELAY = [30e3, 90e3];
+const DAILY_ACTION_LIMIT = 10;
 const MIN_FEED_POSTS = 5; // fewer from the home feed usually means Facebook changed its layout
 const RUN_JITTER_MS = 30 * 60e3;
 const REMOTE_REFRESH_MIN = 360;
@@ -110,8 +112,20 @@ async function refreshList(kind) {
   });
 }
 
-function startActions(kind, method, ids) {
+// Actions done today across every list, as {day: 'YYYY-MM-DD' in local time, count}.
+async function actionsToday() {
+  const day = new Date().toLocaleDateString('sv');
+  const { actionQuota } = await chrome.storage.local.get('actionQuota');
+  return actionQuota?.day === day ? actionQuota : { day, count: 0 };
+}
+
+const LIMIT_REACHED = `Đã đủ ${DAILY_ACTION_LIMIT} thao tác hôm nay. Làm tiếp vào ngày mai để Facebook không coi là hành vi tự động.`;
+
+async function startActions(kind, method, ids) {
   if (!ACTIONS[kind]?.[method]) throw new Error(`Thao tác không hợp lệ: ${method}`);
+  const left = DAILY_ACTION_LIMIT - (await actionsToday()).count;
+  if (left <= 0) throw new Error(LIMIT_REACHED);
+  if (ids.length > left) throw new Error(`Hôm nay chỉ còn ${left}/${DAILY_ACTION_LIMIT} thao tác; hãy chọn tối đa ${left} mục.`);
   const [label, flag] = ACTIONS[kind][method];
   return launch(kind, label, ids.length, async (j) => {
     const names = new Map((await loadList(kind)).items.map((i) => [i.id, i.name]));
@@ -119,8 +133,12 @@ function startActions(kind, method, ids) {
     for (const [n, id] of ids.entries()) {
       if (j.cancel) break;
       if (n) await sleep(uniform(...ACTION_DELAY));
+      // Checked again per action: a midnight rollover may have reset it.
+      const today = await actionsToday();
+      if (today.count >= DAILY_ACTION_LIMIT) throw new Error(LIMIT_REACHED);
       j.current = names.get(id) || id;
       await account.ACTIONS[method](ctx, id); // throws on the first failure: usually Facebook throttling
+      await chrome.storage.local.set({ actionQuota: { ...today, count: today.count + 1 } });
       j.done++;
       const cache = await loadList(kind);
       if (flag) {
@@ -334,7 +352,7 @@ async function route(path, body) {
     if (!verb) return loadList(kind);
     if (verb === 'refresh') return refreshList(kind);
     if (verb === 'action') {
-      const { job: j, done } = startActions(kind, String(body.method), (body.ids || []).map(String));
+      const { job: j, done } = await startActions(kind, String(body.method), (body.ids || []).map(String));
       done.catch(() => {}); // the error is shown through the job
       return j;
     }

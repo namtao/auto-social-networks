@@ -25,7 +25,10 @@ from .store import Store, now
 HOST, PORT = "127.0.0.1", 8765
 CACHE_DIR = DATA_DIR / "manage"
 PAGE = Path(__file__).with_name("manager.html")
-ACTION_DELAY = (3, 7)  # seconds between two actions
+# Facebook flags accounts that unfriend/leave/unfollow in bulk, so actions go slowly and in small daily batches.
+ACTION_DELAY = (30, 90)  # seconds between two actions
+DAILY_ACTION_LIMIT = 10
+LIMIT_REACHED = f"Đã đủ {DAILY_ACTION_LIMIT} thao tác hôm nay. Làm tiếp vào ngày mai để Facebook không coi là hành vi tự động."
 # list kind -> {Account method: (label shown in the UI, flag)}. An action without a flag removes the
 # item from the list; one with a flag keeps it and sets that flag, which survives a refresh.
 ACTIONS = {
@@ -40,6 +43,16 @@ ACTIONS = {
 SOURCE_KINDS = {"pages": "page", "groups": "group"}
 
 log = logging.getLogger(__name__)
+
+
+def actions_today() -> dict:
+    """Actions done today across every list, as {day: local date, count}."""
+    day = datetime.now().date().isoformat()
+    try:
+        quota = json.loads(_cache_path("action-quota").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        quota = {}
+    return quota if quota.get("day") == day else {"day": day, "count": 0}
 
 
 def _cache_path(kind: str) -> Path:
@@ -129,6 +142,11 @@ class Manager:
     def start_actions(self, kind: str, method: str, ids: list[str]) -> dict:
         if method not in ACTIONS[kind]:
             raise RuntimeError(f"Thao tác không hợp lệ: {method}")
+        left = DAILY_ACTION_LIMIT - actions_today()["count"]
+        if left <= 0:
+            raise RuntimeError(LIMIT_REACHED)
+        if len(ids) > left:
+            raise RuntimeError(f"Hôm nay chỉ còn {left}/{DAILY_ACTION_LIMIT} thao tác; hãy chọn tối đa {left} mục.")
         return self._launch(kind, ACTIONS[kind][method][0], len(ids), self._run_actions(kind, method, ids))
 
     async def _run_actions(self, kind: str, method: str, ids: list[str]) -> None:
@@ -140,10 +158,15 @@ class Manager:
                 break
             if n:
                 await asyncio.sleep(random.uniform(*ACTION_DELAY))
+            # Checked again per action: a midnight rollover may have reset it.
+            today = actions_today()
+            if today["count"] >= DAILY_ACTION_LIMIT:
+                raise RuntimeError(LIMIT_REACHED)
             job["current"] = names.get(item_id, item_id)
             async with self.lock:
                 await self._ready()
                 await action(item_id)  # raises on the first failure: usually Facebook throttling
+            _cache_path("action-quota").write_text(json.dumps({**today, "count": today["count"] + 1}), encoding="utf-8")
             job["done"] += 1
             cache = load(kind)
             if flag:
@@ -169,7 +192,6 @@ class Manager:
 
         async def on_done(src, posts):
             counts["collected"] += len(posts)
-            # Await before adding: sources finish concurrently, and `+= await` would add to a stale value.
             new = await asyncio.to_thread(store.add_posts, posts)
             counts["new"] += new
             job["done"] += 1

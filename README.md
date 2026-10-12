@@ -110,12 +110,12 @@ Mỗi bài chỉ được gửi một lần. Một lượt với 30 bài mất k
 | Trang | Ảnh, tên, loại trang, đã thích, xác minh | Chỉ nguồn quét, loại trang | Bỏ theo dõi, chọn làm nguồn quét |
 | Nhóm | Ảnh, tên, lần bạn vào cuối, bài mới nhất, quản trị, đã bỏ theo dõi, đã tắt thông báo | Chỉ nguồn quét, không vào ≥ N ngày, không có bài mới ≥ N ngày | Rời nhóm, bỏ theo dõi, tắt thông báo, chọn làm nguồn quét |
 
-Bấm "Làm mới" để tải danh sách từ Facebook (vài giây với trang, khoảng 30 giây với bạn bè hoặc nhóm). Kết quả được lưu ở `data/manage/`. Nút gạt "Thao tác" ở góc phải chọn giữa nút ngay trên từng dòng và chế độ chọn nhiều dòng rồi làm một lần. "Xuất CSV" xuất các dòng đang chọn, hoặc toàn bộ dòng đang hiển thị nếu chưa chọn dòng nào.
+Bấm "Làm mới" để tải danh sách từ Facebook (vài giây với trang, khoảng một phút với bạn bè; với nhóm, extension còn đọc trạng thái theo dõi và thông báo của từng nhóm nên mất khoảng 5 giây mỗi nhóm). Kết quả được lưu ở `data/manage/`. Nút gạt "Thao tác" ở góc phải chọn giữa nút ngay trên từng dòng và chế độ chọn nhiều dòng rồi làm một lần. "Xuất CSV" xuất các dòng đang chọn, hoặc toàn bộ dòng đang hiển thị nếu chưa chọn dòng nào.
 
 ### Quét bài theo trang, nhóm
 
 1. Ở tab Trang hoặc Nhóm, bấm ☆ để chọn nguồn. Danh sách nguồn được lưu ở `data/manage/sources.json`.
-2. Ở tab Bài viết (trang mở ra mặc định), bấm "Quét ngay". Bot lấy các bài đăng trong 2 ngày gần nhất của từng nguồn (đổi bằng `SOURCE_DAYS`), lưu vào bảng `fb_posts` trong Postgres, chấm điểm bằng LLM, và gửi digest Telegram nếu bạn tick "Gửi digest Telegram".
+2. Ở tab Bài viết (trang mở ra mặc định), bấm "Quét ngay". Bot lấy lần lượt từng nguồn, nghỉ 10–25 giây giữa hai nguồn và 2–5 giây giữa hai trang bài, các bài đăng trong 2 ngày gần nhất (đổi bằng `SOURCE_DAYS`), lưu vào bảng `fb_posts` trong Postgres, chấm điểm bằng LLM, và gửi digest Telegram nếu bạn tick "Gửi digest Telegram".
 
 Tab Bài viết mặc định chỉ hiển thị những bài mà lượt quét gần nhất mới thu được, mới nhất trước; lượt đó có thể là nút "Quét ngay" hoặc `fb-digest run`. Quét xong, bộ lọc "Chỉ bài mới quét" tự bật lại. Bỏ tick để xem toàn bộ bài đã lưu. Bộ lọc bạn điền (ví dụ "Điểm ≥") được nhớ cho lần mở sau. Nút "Bỏ qua" trên mỗi dòng ẩn bài đó (lưu ở cột `skipped_at`) và loại nó khỏi digest Telegram; bỏ tick "Ẩn bài đã bỏ qua" để xem lại và bấm "Hiện lại". Bài trùng không được lưu lại: trùng nội dung, hoặc trùng link khi tác giả sửa bài.
 
@@ -128,7 +128,7 @@ Thời gian đăng lấy từ dữ liệu JSON mà Facebook gửi về trang (`c
 ### Lưu ý
 
 - **Tài khoản đã khóa:** là bạn bè vẫn có trong danh sách trên trang cá nhân nhưng Facebook không trả về trong danh sách bạn bè đang hoạt động.
-- **Thao tác:** chạy lần lượt, mỗi thao tác cách nhau 3–7 giây, và tự dừng ở lỗi đầu tiên vì lỗi thường là do Facebook đang hạn chế tài khoản. Hủy kết bạn, bỏ theo dõi trang và rời nhóm không hoàn tác được. Bỏ theo dõi nhóm (vẫn là thành viên nhưng không thấy bài trên bảng feed) và tắt thông báo nhóm (tắt cả thông báo trong Facebook lẫn thông báo đẩy) giữ nhóm trong danh sách và đánh dấu ✓ ở cột tương ứng; Facebook không cho biết trạng thái này khi tải danh sách, nên cột chỉ ghi những gì đã làm từ trang quản lý. Muốn bật lại thì làm trên Facebook. Nên xử lý vài chục mục mỗi lần, đừng xử lý cả trăm mục liền. Rời nhóm hoặc bỏ theo dõi một nguồn quét cũng bỏ nó khỏi danh sách nguồn.
+- **Thao tác:** chạy lần lượt, mỗi thao tác cách nhau 30–90 giây, tối đa 10 thao tác mỗi ngày (cộng chung mọi tab), và tự dừng ở lỗi đầu tiên vì lỗi thường là do Facebook đang hạn chế tài khoản. Hủy kết bạn, bỏ theo dõi trang và rời nhóm không hoàn tác được. Bỏ theo dõi nhóm (vẫn là thành viên nhưng không thấy bài trên bảng feed) và tắt thông báo nhóm (tắt cả thông báo trong Facebook lẫn thông báo đẩy) giữ nhóm trong danh sách và đánh dấu ✓ ở cột tương ứng; Facebook không cho biết trạng thái này khi tải danh sách, nên cột chỉ ghi những gì đã làm từ trang quản lý. Muốn bật lại thì làm trên Facebook. Rời nhóm hoặc bỏ theo dõi một nguồn quét cũng bỏ nó khỏi danh sách nguồn.
 - **Bỏ theo dõi trang:** trang không còn hiện trên feed, nhưng lượt thích trang (nếu có) vẫn giữ nguyên.
 - **Chạy cùng lệnh khác:** trang quản lý dùng chung profile Chrome với bot. Khi đang mở trang quản lý, hãy quét bằng nút "Quét ngay" thay vì `fb-digest run`, và tắt trang quản lý (Ctrl+C) trước giờ timer chạy.
 
